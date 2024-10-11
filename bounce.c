@@ -48,7 +48,7 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 // all symmetry planes
 
 int MAXlevel;
-double Oh, tmax;
+double We, Oh, tmax;
 char nameOut[80], dumpFile[80];
 
 int  main(int argc, char const *argv[]) {
@@ -60,15 +60,16 @@ int  main(int argc, char const *argv[]) {
   }
 
   L0 = Ldomain;
-  origin (-L0/2., 0.);
+  origin (0., 0.);
   init_grid (1 << 6);
   // Values taken from the terminal
   MAXlevel = atoi(argv[1]);
   tauy = atof(argv[2]);
-  Oh = atof(argv[3]);
-  tmax = atof(argv[4]);
+  We = atof(argv[3]);
+  Oh = atof(argv[4]);
+  tmax = atof(argv[5]);
 
-  fprintf(ferr, "Level %d, Oh %2.1e, tauy %4.3f\n", MAXlevel, Oh, tauy);
+  fprintf(ferr, "Level %d, We %2.1e, Oh %2.1e, tauy %4.3f\n", MAXlevel, We, Oh, tauy);
 
   // Create a folder named intermediate where all the simulation snapshots are stored.
   char comm[80];
@@ -110,7 +111,7 @@ event init (t = 0) {
     refine((R2Drop(x, y) < 1.05) && (level < MAXlevel));
     fraction(f, 1. - R2Drop(x, y));
     foreach() {
-      u.x[] = -1.0 * f[];
+      u.x[] = -1.0 * f[] * sqrt(We);
       u.y[] = 0.0;
     }
   }
@@ -150,13 +151,13 @@ event writingFiles (t = 0; t += tsnap1; t <= tmax+tsnap1) {
 ## Ending Simulation
 */
 event end (t = end) {
-  fprintf(ferr, "Done: Level %d, Oh %2.1e, Tauy %4.3f\n", MAXlevel, Oh, tauy);
+  fprintf(ferr, "Done: Level %d, We %2.1e, Oh %2.1e, Tauy %4.3f\n", MAXlevel, We, Oh, tauy);
 }
 
 /**
 ## Log writing
 */
-event logWriting (t = 0; t += tsnap2; t <= tmax+tsnap1) {
+event logWriting (i++) {
   double ke = 0.;
   foreach (reduction(+:ke)){
     ke += (2*pi*y)*(0.5*rho(f[])*(sq(u.x[]) + sq(u.y[])))*sq(Delta);
