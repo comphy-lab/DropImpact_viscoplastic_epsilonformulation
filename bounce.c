@@ -101,10 +101,11 @@ int  main(int argc, char const *argv[]) {
   Here, $\gamma$ is the liquid-gas surface tension coefficient, and $\tau_y$ and $\rho_l$ are the liquid's yield stress and density, respectively. Next, $\mu_l$ is the constant viscosity in the Bingham model. Note that in our simulations, we also solve the fluid's motion in the gas phase, using a similar set of equations (Newtonian). Hence, the further relevant non-dimensional groups in addition to those above are the ratios of density $\left(\rho_r = \rho_g/\rho_l\right)$ and viscosity $\left(\mu_r = \mu_g/\mu_l\right)$. In the present study, these ratios are kept fixed at $10^{-3}$ and $2 \times 10^{-2}$, respectively (see above). 
   */
 
-  epsilon = 1e-6;  // epsilon regularisation value of effective viscosity
+  epsilon = 1e-4;  // epsilon regularisation value of effective viscosity
   rho1 = 1., rho2 = RHO21;
   mu1 = Oh, mu2 = MU21*Oh;
   f.sigma = 1.0;
+  TOLERANCE = 1e-6;
   run();
 }
 
@@ -127,17 +128,33 @@ event adapt(i++){
   We adapt based on curvature, $\kappa$ and D2. 
   Adaptation based on $\kappa$ ensures a constant grid resolution across the interface. See [this](http://basilisk.fr/sandbox/Antoonvh/rc.c) for further reading. 
   */
+
+  // sometimes, D2 adaptation is screwing up with the new Basilisk... :( also see: https://github.com/VatsalSy/Bursting-Bubble-In-a-Viscoplastic-Medium/issues/2 for issues with curvature.
+
+  // scalar KAPPA[];
+  // curvature(f, KAPPA);
+
+  // scalar D2c[];
+  // foreach(){
+  //   D2c[] = f[]*pow(10,D2[]);
+  // }
+
+  // adapt_wavelet ((scalar *){f, u.x, u.y, KAPPA, D2c},
+  //     (double[]){fErr, VelErr, VelErr, KErr, D2Err},
+  //     MAXlevel);
+
   scalar KAPPA[];
   curvature(f, KAPPA);
 
-  scalar D2c[];
-  foreach(){
-    D2c[] = f[]*pow(10,D2[]);
-  }
-
-  adapt_wavelet ((scalar *){f, u.x, u.y, KAPPA, D2c},
-      (double[]){fErr, VelErr, VelErr, KErr, D2Err},
+  if (t < 10*tsnap2){
+      adapt_wavelet ((scalar *){f, u.x, u.y},
+      (double[]){fErr, VelErr, VelErr},
       MAXlevel);
+  } else {
+    adapt_wavelet ((scalar *){f, u.x, u.y, KAPPA},
+      (double[]){fErr, VelErr, VelErr, KErr},
+      MAXlevel);
+  }
 }
 
 /**
@@ -159,7 +176,7 @@ event end (t = end) {
 /**
 ## Log writing
 */
-event logWriting (i++) {
+event logWriting (t = 0; t += tsnap2; t <= tmax+tsnap1) {
   double ke = 0.;
   foreach (reduction(+:ke)){
     ke += (2*pi*y)*(0.5*rho(f[])*(sq(u.x[]) + sq(u.y[])))*sq(Delta);
