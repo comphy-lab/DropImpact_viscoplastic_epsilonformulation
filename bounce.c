@@ -45,6 +45,8 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 #define R2Drop(x,y) (sq(x - Xdist) + sq(y))
 
 // boundary conditions
+u.t[left] = dirichlet(0.0);
+f[left] = dirichlet(0.0);
 // all symmetry planes
 
 int MAXlevel;
@@ -54,8 +56,8 @@ char nameOut[80], dumpFile[80];
 int  main(int argc, char const *argv[]) {
 
   // Ensure that all the variables were transferred properly from the terminal or job script.
-  if (argc < 5){
-    fprintf(ferr, "Lack of command line arguments. Check! Need %d more arguments\n",5-argc);
+  if (argc < 6){
+    fprintf(ferr, "Lack of command line arguments. Check! Need %d more arguments, Level, tauy, We, Oh, tmax\n",6-argc);
     return 1;
   }
 
@@ -99,7 +101,7 @@ int  main(int argc, char const *argv[]) {
   Here, $\gamma$ is the liquid-gas surface tension coefficient, and $\tau_y$ and $\rho_l$ are the liquid's yield stress and density, respectively. Next, $\mu_l$ is the constant viscosity in the Bingham model. Note that in our simulations, we also solve the fluid's motion in the gas phase, using a similar set of equations (Newtonian). Hence, the further relevant non-dimensional groups in addition to those above are the ratios of density $\left(\rho_r = \rho_g/\rho_l\right)$ and viscosity $\left(\mu_r = \mu_g/\mu_l\right)$. In the present study, these ratios are kept fixed at $10^{-3}$ and $2 \times 10^{-2}$, respectively (see above). 
   */
 
-  epsilon = 1e-6;  // The regularisation value of viscosity
+  epsilon = 1e-6;  // epsilon regularisation value of effective viscosity
   rho1 = 1., rho2 = RHO21;
   mu1 = Oh, mu2 = MU21*Oh;
   f.sigma = 1.0;
