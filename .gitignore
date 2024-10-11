@@ -1,4 +1,9 @@
 **/.DS_Store
+bounce
+intermediate*
+log
+dump*
+*.html
 
 # Object files
 *.o
