@@ -9,7 +9,7 @@ We investigate the classical problem of VP drop impacting a solid surface.
 Id 1 is for the Viscoplastic liquid drop, and Id 2 is Newtonian gas.
 */
 
-#include "axi.h"
+// #include "axi.h"
 #include "navier-stokes/centered.h"
 #define FILTERED // Smear density and viscosity jumps
 /**
@@ -24,14 +24,13 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 #include "reduced.h"
 #include "distance.h"
 
-#define tsnap1 (0.01)
-#define tsnap2 (0.001)
+#define tsnap (0.01)
 
 // Error tolerancs
 #define fErr (1e-3)                                 // error tolerance in f1 VOF
-#define KErr (1e-3)                                 // error tolerance in VoF curvature calculated using heigh function method (see adapt event)
+#define KErr (1e-6)                                 // error tolerance in VoF curvature calculated using heigh function method (see adapt event)
 #define VelErr (1e-2)                               // error tolerances in velocity -- Use 1e-2 for low Oh and 1e-3 to 5e-3 for high Oh/moderate to high J
-#define D2Err (1e-1)
+#define D2Err (1e-2)
 
 // gas properties!
 #define RHO21 (1e-3)
@@ -45,12 +44,13 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 #define R2Drop(x,y) (sq(x - Xdist) + sq(y))
 
 // boundary conditions
-u.t[left] = dirichlet(0.0);
-f[left] = dirichlet(0.0);
+// we are doing drop impact on a free-slip wall with 90 degree contact angle.
+// u.t[left] = dirichlet(0.0);
+// f[left] = dirichlet(0.0);
 // all symmetry planes
 
 int MAXlevel;
-double We, Oh, tmax;
+double We, Oh, J, tmax;
 char nameOut[80], dumpFile[80];
 
 int  main(int argc, char const *argv[]) {
@@ -63,15 +63,15 @@ int  main(int argc, char const *argv[]) {
 
   L0 = Ldomain;
   origin (0., 0.);
-  init_grid (1 << 6);
+  init_grid (1 << 8);
   // Values taken from the terminal
   MAXlevel = atoi(argv[1]);
-  tauy = atof(argv[2]);
-  We = atof(argv[3]);
-  Oh = atof(argv[4]);
+  J = atof(argv[2]); // plasto-capillary number
+  We = atof(argv[3]); // Weber number
+  Oh = atof(argv[4]); // Ohnesorge number
   tmax = atof(argv[5]);
 
-  fprintf(ferr, "Level %d, We %2.1e, Oh %2.1e, tauy %4.3f\n", MAXlevel, We, Oh, tauy);
+  fprintf(ferr, "Level %d, We %2.1e, Oh %2.1e, J %4.3f\n", MAXlevel, We, Oh, J);
 
   // Create a folder named intermediate where all the simulation snapshots are stored.
   char comm[80];
@@ -101,11 +101,13 @@ int  main(int argc, char const *argv[]) {
   Here, $\gamma$ is the liquid-gas surface tension coefficient, and $\tau_y$ and $\rho_l$ are the liquid's yield stress and density, respectively. Next, $\mu_l$ is the constant viscosity in the Bingham model. Note that in our simulations, we also solve the fluid's motion in the gas phase, using a similar set of equations (Newtonian). Hence, the further relevant non-dimensional groups in addition to those above are the ratios of density $\left(\rho_r = \rho_g/\rho_l\right)$ and viscosity $\left(\mu_r = \mu_g/\mu_l\right)$. In the present study, these ratios are kept fixed at $10^{-3}$ and $2 \times 10^{-2}$, respectively (see above). 
   */
 
-  epsilon = 1e-4;  // epsilon regularisation value of effective viscosity
+  // epsilon = t < tsnap ? 1e-1 : 1e-3;  // epsilon regularisation value of effective viscosity
+  epsilon = 1e-3;  // epsilon regularisation value of effective viscosity
   rho1 = 1., rho2 = RHO21;
-  mu1 = Oh, mu2 = MU21*Oh;
-  f.sigma = 1.0;
-  TOLERANCE = 1e-6;
+  mu1 = Oh/sqrt(We), mu2 = MU21*Oh/sqrt(We);
+  f.sigma = 1.0/We;
+  tauy = J/We;
+  CFL = 1e-1;
   run();
 }
 
@@ -114,7 +116,7 @@ event init (t = 0) {
     refine((R2Drop(x, y) < 1.05) && (level < MAXlevel));
     fraction(f, 1. - R2Drop(x, y));
     foreach() {
-      u.x[] = -1.0 * f[] * sqrt(We);
+      u.x[] = -1.0 * f[];
       u.y[] = 0.0;
     }
   }
@@ -124,43 +126,21 @@ event init (t = 0) {
 ## Adaptive Mesh Refinement
 */
 event adapt(i++){
-  /**
-  We adapt based on curvature, $\kappa$ and D2. 
-  Adaptation based on $\kappa$ ensures a constant grid resolution across the interface. See [this](http://basilisk.fr/sandbox/Antoonvh/rc.c) for further reading. 
-  */
-
-  // sometimes, D2 adaptation is screwing up with the new Basilisk... :( also see: https://github.com/VatsalSy/Bursting-Bubble-In-a-Viscoplastic-Medium/issues/2 for issues with curvature.
-
-  // scalar KAPPA[];
-  // curvature(f, KAPPA);
-
-  // scalar D2c[];
-  // foreach(){
-  //   D2c[] = f[]*pow(10,D2[]);
-  // }
-
-  // adapt_wavelet ((scalar *){f, u.x, u.y, KAPPA, D2c},
-  //     (double[]){fErr, VelErr, VelErr, KErr, D2Err},
-  //     MAXlevel);
-
-  scalar KAPPA[];
-  curvature(f, KAPPA);
-
-  if (t < 10*tsnap2){
-      adapt_wavelet ((scalar *){f, u.x, u.y},
-      (double[]){fErr, VelErr, VelErr},
-      MAXlevel);
-  } else {
-    adapt_wavelet ((scalar *){f, u.x, u.y, KAPPA},
-      (double[]){fErr, VelErr, VelErr, KErr},
-      MAXlevel);
+  scalar D2c[];
+  
+  foreach(){
+    D2c[] = pow(10, D2[]);
   }
+
+  adapt_wavelet ((scalar *){f, u.x, u.y, D2c},
+    (double[]){fErr, VelErr, VelErr, D2Err},
+    MAXlevel);
 }
 
 /**
 ## Dumping snapshots
 */
-event writingFiles (t = 0; t += tsnap1; t <= tmax+tsnap1) {
+event writingFiles (t = 0; t += tsnap; t <= tmax+tsnap) {
   dump (file = dumpFile);
   sprintf (nameOut, "intermediate/snapshot-%5.4f", t);
   dump(file=nameOut);
@@ -170,13 +150,13 @@ event writingFiles (t = 0; t += tsnap1; t <= tmax+tsnap1) {
 ## Ending Simulation
 */
 event end (t = end) {
-  fprintf(ferr, "Done: Level %d, We %2.1e, Oh %2.1e, Tauy %4.3f\n", MAXlevel, We, Oh, tauy);
+  fprintf(ferr, "Done: Level %d, We %2.1e, Oh %2.1e, J %4.3f\n", MAXlevel, We, Oh, J);
 }
 
 /**
 ## Log writing
 */
-event logWriting (t = 0; t += tsnap2; t <= tmax+tsnap1) {
+event logWriting (i++) {
   double ke = 0.;
   foreach (reduction(+:ke)){
     ke += (2*pi*y)*(0.5*rho(f[])*(sq(u.x[]) + sq(u.y[])))*sq(Delta);

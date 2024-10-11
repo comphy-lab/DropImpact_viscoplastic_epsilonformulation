@@ -60,9 +60,9 @@ averages (i.e. harmonic). */
 #endif
 #ifndef mu
 // for Arithmetic mean, use this
-// # define mu(muTemp, mu2, f)  (clamp(f,0.,1.)*(muTemp - mu2) + mu2)
+# define mu(muTemp, mu2, f)  (clamp(f,0.,1.)*(muTemp - mu2) + mu2)
 // for Harmonic mean, use this
-# define mu(muTemp, mu2, f) (1.0 / ((clamp(f,0.,1.) / muTemp) + ((1.0 - clamp(f,0.,1.)) / mu2)))
+// # define mu(muTemp, mu2, f) (1.0 / ((clamp(f,0.,1.) / muTemp) + ((1.0 - clamp(f,0.,1.)) / mu2)))
 #endif
 
 /**
@@ -163,8 +163,10 @@ Reproduced from: [P.-Y. Lagrée's Sandbox](http://basilisk.fr/sandbox/M1EMN/Exem
     D2temp += sq((u.x[0,1] - u.x[0,-1] + u.x[-1,1] - u.x[-1,-1])/(2.*Delta)); // D33
     D2temp += sq(0.5*( (u.y[0,1] - u.y[0,-1] + u.y[-1,1] - u.y[-1,-1])/Delta + 0.5*( (u.x[0,1] - u.x[0,-1] + u.x[-1,1] - u.x[-1,-1])/(2.*Delta) ))); // D13
 
+    D2temp = sqrt(D2temp);
+
     if (tauy > 0.){
-      muTemp = tauy/(sqrt(2.)*D2temp + epsilon) + mu1;  
+      muTemp = tauy/(sqrt(2.)*D2temp + epsilon) + mu1;
     }
     
     muv.x[] = fm.x[]*mu(muTemp, mu2, ff);
@@ -186,8 +188,10 @@ Reproduced from: [P.-Y. Lagrée's Sandbox](http://basilisk.fr/sandbox/M1EMN/Exem
     D2temp += sq(0.5*( (u.x[1,0] - u.x[-1,0] + u.x[1,-1] - u.x[-1,-1])/(2.*Delta) )); // D33
     D2temp += sq(0.5*( (u.x[0,0] - u.x[0,-1])/Delta + 0.5*( (u.y[1,0] - u.y[-1,0] + u.y[1,-1] - u.y[-1,-1])/(2.*Delta) ) )); // D13
 
+    D2temp = sqrt(D2temp);
+
     if (tauy > 0.){
-      muTemp = tauy/(sqrt(2.)*D2temp + epsilon) + mu1;  
+      muTemp = tauy/(sqrt(2.)*D2temp + epsilon) + mu1;
     }
 
     muv.y[] = fm.y[]*mu(muTemp, mu2, ff);
@@ -203,7 +207,7 @@ Reproduced from: [P.-Y. Lagrée's Sandbox](http://basilisk.fr/sandbox/M1EMN/Exem
   */
   foreach(){
     rhov[] = cm[]*rho(sf[]);
-    D2[] = (D2f.x[]+D2f.y[]+D2f.x[1,0]+D2f.y[0,1])/4.;
+    D2[] = f[]*(D2f.x[]+D2f.y[]+D2f.x[1,0]+D2f.y[0,1])/4.;
     if (D2[] > 0.){
       D2[] = log(D2[])/log(10);
     } else {
