@@ -32,14 +32,15 @@ int main(int a, char const *arguments[])
   */
   restore (file = filename);
 
+  #define UseD2c 1
   foreach() {
     #if UseD2c
     double D11 = (u.y[0,1] - u.y[0,-1])/(2*Delta);
     double D22 = (u.y[]/y);
     double D33 = (u.x[1,0] - u.x[-1,0])/(2*Delta);
     double D13 = 0.5*( (u.y[1,0] - u.y[-1,0] + u.x[0,1] - u.x[0,-1])/(2*Delta) );
-    double D2 = (sq(D11)+sq(D22)+sq(D33)+2.0*sq(D13));
-    D2c[] = f[]*(D2);
+    double D2 = sqrt(sq(D11)+sq(D22)+sq(D33)+2.0*sq(D13));
+    D2c[] = f[]*(D2)/sqrt(2.);
     
     if (D2c[] > 0.){
       D2c[] = log(D2c[])/log(10);

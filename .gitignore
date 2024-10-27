@@ -13,6 +13,7 @@ dump*
 
 # executable
 getData2D
+getData2D-VP
 getFacet2D
 bounce
 

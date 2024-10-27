@@ -122,7 +122,7 @@ def process_timestep(ti, folder, nGFS, GridsPerR, rmin, rmax, zmin, zmax, lw):
     line_segments = LineCollection(segs1, linewidths=4, colors='blue', linestyle='solid')
     ax.add_collection(line_segments)
 
-    cntrl1 = ax.imshow(taus, cmap="hot_r", interpolation='none', origin='lower', extent=[-rminp, -rmaxp, zminp, zmaxp], vmax=2.0, vmin=-3.0)
+    cntrl1 = ax.imshow(taus, cmap="hot_r", interpolation='none', origin='lower', extent=[-rminp, -rmaxp, zminp, zmaxp], vmax=2.0, vmin=-2.0)
     cntrl2 = ax.imshow(vel, interpolation='Bilinear', cmap='Blues', origin='lower', extent=[rminp, rmaxp, zminp, zmaxp], vmax=2.0, vmin=0.0)
 
     ax.set_aspect('equal')
@@ -160,7 +160,7 @@ def main():
     parser.add_argument('--nGFS', type=int, default=550, help='Number of restart files to process')
     parser.add_argument('--ZMAX', type=float, default=4.0, help='Maximum Z value')
     parser.add_argument('--RMAX', type=float, default=2.0, help='Maximum R value')
-    parser.add_argument('--ZMIN', type=float, default=-4.0, help='Minimum Z value')
+    parser.add_argument('--ZMIN', type=float, default=0.0, help='Minimum Z value')
     args = parser.parse_args()
 
     CPUStoUse = args.CPUs
