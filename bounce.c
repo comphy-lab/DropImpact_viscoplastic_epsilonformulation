@@ -28,9 +28,9 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 
 // Error tolerancs
 #define fErr (1e-3)                                 // error tolerance in f1 VOF
-#define KErr (1e-6)                                 // error tolerance in VoF curvature calculated using heigh function method (see adapt event)
 #define VelErr (1e-2)                               // error tolerances in velocity -- Use 1e-2 for low Oh and 1e-3 to 5e-3 for high Oh/moderate to high J
 #define D2Err (1e-2)
+#define KAPPAErr (1e-2)
 
 // gas properties!
 #define RHO21 (1e-3)
@@ -65,7 +65,7 @@ int  main(int argc, char const *argv[]) {
   init_grid (1 << 8);
   // Values taken from the terminal
   MAXlevel = 9; // atoi(argv[1]);
-  J = 1e0; // atof(argv[2]); // plasto-capillary number
+  J = 1e-1; // atof(argv[2]); // plasto-capillary number
   We = 1e1; // atof(argv[3]); // Weber number
   Oh = 1e-2; // atof(argv[4]); // Ohnesorge number
   tmax = 1e0; // atof(argv[5]);
@@ -125,15 +125,25 @@ event init (t = 0) {
 ## Adaptive Mesh Refinement
 */
 event adapt(i++){
-  scalar D2c[];
-  
-  foreach(){
-    D2c[] = pow(10, D2[]);
-  }
-
-  adapt_wavelet ((scalar *){f, u.x, u.y, D2c},
-    (double[]){fErr, VelErr, VelErr, D2Err},
+  if (t < 1e-2){
+    adapt_wavelet ((scalar *){f, u.x, u.y},
+    (double[]){fErr, VelErr, VelErr},
     MAXlevel);
+  } else {
+    scalar KAPPA[], D2c[];
+    curvature(f, KAPPA);
+    foreach() {
+      double D11 = (u.y[0,1] - u.y[0,-1])/(2*Delta);
+      double D22 = (u.y[]/y);
+      double D33 = (u.x[1,0] - u.x[-1,0])/(2*Delta);
+      double D13 = 0.5*( (u.y[1,0] - u.y[-1,0] + u.x[0,1] - u.x[0,-1])/(2*Delta) );
+      double D2 = (sq(D11)+sq(D22)+sq(D33)+2.0*sq(D13));
+      D2c[] = f[]*(D2);
+    }
+    adapt_wavelet ((scalar *){f, u.x, u.y, KAPPA, D2c},
+    (double[]){fErr, VelErr, VelErr, KAPPAErr, D2Err},
+    MAXlevel);
+  }
 }
 
 /**
