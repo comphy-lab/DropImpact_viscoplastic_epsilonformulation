@@ -9,7 +9,7 @@ We investigate the classical problem of VP drop impacting a solid surface.
 Id 1 is for the Viscoplastic liquid drop, and Id 2 is Newtonian gas.
 */
 
-// #include "axi.h"
+#include "axi.h"
 #include "navier-stokes/centered.h"
 #define FILTERED // Smear density and viscosity jumps
 /**
@@ -28,9 +28,9 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 
 // Error tolerancs
 #define fErr (1e-3)                                 // error tolerance in f1 VOF
-#define KErr (1e-6)                                 // error tolerance in VoF curvature calculated using heigh function method (see adapt event)
 #define VelErr (1e-2)                               // error tolerances in velocity -- Use 1e-2 for low Oh and 1e-3 to 5e-3 for high Oh/moderate to high J
 #define D2Err (1e-2)
+#define KAPPAErr (1e-2)
 
 // gas properties!
 #define RHO21 (1e-3)
@@ -44,9 +44,8 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 #define R2Drop(x,y) (sq(x - Xdist) + sq(y))
 
 // boundary conditions
-// we are doing drop impact on a free-slip wall with 90 degree contact angle.
-// u.t[left] = dirichlet(0.0);
-// f[left] = dirichlet(0.0);
+u.t[left] = dirichlet(0.0);
+f[left] = dirichlet(0.0);
 // all symmetry planes
 
 int MAXlevel;
@@ -56,20 +55,20 @@ char nameOut[80], dumpFile[80];
 int  main(int argc, char const *argv[]) {
 
   // Ensure that all the variables were transferred properly from the terminal or job script.
-  if (argc < 6){
-    fprintf(ferr, "Lack of command line arguments. Check! Need %d more arguments, Level, tauy, We, Oh, tmax\n",6-argc);
-    return 1;
-  }
+  // if (argc < 6){
+  //   fprintf(ferr, "Lack of command line arguments. Check! Need %d more arguments, Level, tauy, We, Oh, tmax\n",6-argc);
+  //   return 1;
+  // }
 
   L0 = Ldomain;
   origin (0., 0.);
   init_grid (1 << 8);
   // Values taken from the terminal
-  MAXlevel = atoi(argv[1]);
-  J = atof(argv[2]); // plasto-capillary number
-  We = atof(argv[3]); // Weber number
-  Oh = atof(argv[4]); // Ohnesorge number
-  tmax = atof(argv[5]);
+  MAXlevel = 9; // atoi(argv[1]);
+  J = 1e-1; // atof(argv[2]); // plasto-capillary number
+  We = 1e1; // atof(argv[3]); // Weber number
+  Oh = 1e-2; // atof(argv[4]); // Ohnesorge number
+  tmax = 1e0; // atof(argv[5]);
 
   fprintf(ferr, "Level %d, We %2.1e, Oh %2.1e, J %4.3f\n", MAXlevel, We, Oh, J);
 
@@ -102,7 +101,7 @@ int  main(int argc, char const *argv[]) {
   */
 
   // epsilon = t < tsnap ? 1e-1 : 1e-3;  // epsilon regularisation value of effective viscosity
-  epsilon = 1e-3;  // epsilon regularisation value of effective viscosity
+  epsilon = 1e-2;  // epsilon regularisation value of effective viscosity
   rho1 = 1., rho2 = RHO21;
   mu1 = Oh/sqrt(We), mu2 = MU21*Oh/sqrt(We);
   f.sigma = 1.0/We;
@@ -126,15 +125,25 @@ event init (t = 0) {
 ## Adaptive Mesh Refinement
 */
 event adapt(i++){
-  scalar D2c[];
-  
-  foreach(){
-    D2c[] = pow(10, D2[]);
-  }
-
-  adapt_wavelet ((scalar *){f, u.x, u.y, D2c},
-    (double[]){fErr, VelErr, VelErr, D2Err},
+  if (t < 1e-2){
+    adapt_wavelet ((scalar *){f, u.x, u.y},
+    (double[]){fErr, VelErr, VelErr},
     MAXlevel);
+  } else {
+    scalar KAPPA[], D2c[];
+    curvature(f, KAPPA);
+    foreach() {
+      double D11 = (u.y[0,1] - u.y[0,-1])/(2*Delta);
+      double D22 = (u.y[]/y);
+      double D33 = (u.x[1,0] - u.x[-1,0])/(2*Delta);
+      double D13 = 0.5*( (u.y[1,0] - u.y[-1,0] + u.x[0,1] - u.x[0,-1])/(2*Delta) );
+      double D2 = (sq(D11)+sq(D22)+sq(D33)+2.0*sq(D13));
+      D2c[] = f[]*(D2);
+    }
+    adapt_wavelet ((scalar *){f, u.x, u.y, KAPPA, D2c},
+    (double[]){fErr, VelErr, VelErr, KAPPAErr, D2Err},
+    MAXlevel);
+  }
 }
 
 /**
