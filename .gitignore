@@ -4,6 +4,18 @@ intermediate*
 log
 dump*
 *.html
+*.tags*
+*.s*
+*.tst
+*.deps
+*.tests
+*.log
+
+# executable
+getData2D
+getFacet2D
+bounce
+
 
 # Object files
 *.o

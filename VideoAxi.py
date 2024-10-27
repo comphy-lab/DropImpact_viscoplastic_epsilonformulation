@@ -47,7 +47,7 @@ def gettingFacets(filename,includeCoat='true'):
     return segs
 
 def gettingfield(filename, zmin, zmax, rmax, nr):
-    exe = ["./getData2D", filename, str(zmin), str(0), str(zmax), str(rmax), str(nr)]
+    exe = ["./getData2D-VP", filename, str(zmin), str(0), str(zmax), str(rmax), str(nr)]
     p = sp.Popen(exe, stdout=sp.PIPE, stderr=sp.PIPE)
     stdout, stderr = p.communicate()
     temp1 = stderr.decode("utf-8")
@@ -122,7 +122,7 @@ def process_timestep(ti, folder, nGFS, GridsPerR, rmin, rmax, zmin, zmax, lw):
     line_segments = LineCollection(segs1, linewidths=4, colors='blue', linestyle='solid')
     ax.add_collection(line_segments)
 
-    cntrl1 = ax.imshow(taus, cmap="hot_r", interpolation='Bilinear', origin='lower', extent=[-rminp, -rmaxp, zminp, zmaxp], vmax=2.0, vmin=-3.0)
+    cntrl1 = ax.imshow(taus, cmap="hot_r", interpolation='none', origin='lower', extent=[-rminp, -rmaxp, zminp, zmaxp], vmax=2.0, vmin=-3.0)
     cntrl2 = ax.imshow(vel, interpolation='Bilinear', cmap='Blues', origin='lower', extent=[rminp, rmaxp, zminp, zmaxp], vmax=2.0, vmin=0.0)
 
     ax.set_aspect('equal')

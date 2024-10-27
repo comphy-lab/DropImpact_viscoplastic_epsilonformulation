@@ -9,7 +9,7 @@ We investigate the classical problem of VP drop impacting a solid surface.
 Id 1 is for the Viscoplastic liquid drop, and Id 2 is Newtonian gas.
 */
 
-// #include "axi.h"
+#include "axi.h"
 #include "navier-stokes/centered.h"
 #define FILTERED // Smear density and viscosity jumps
 /**
@@ -44,9 +44,8 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 #define R2Drop(x,y) (sq(x - Xdist) + sq(y))
 
 // boundary conditions
-// we are doing drop impact on a free-slip wall with 90 degree contact angle.
-// u.t[left] = dirichlet(0.0);
-// f[left] = dirichlet(0.0);
+u.t[left] = dirichlet(0.0);
+f[left] = dirichlet(0.0);
 // all symmetry planes
 
 int MAXlevel;
@@ -56,20 +55,20 @@ char nameOut[80], dumpFile[80];
 int  main(int argc, char const *argv[]) {
 
   // Ensure that all the variables were transferred properly from the terminal or job script.
-  if (argc < 6){
-    fprintf(ferr, "Lack of command line arguments. Check! Need %d more arguments, Level, tauy, We, Oh, tmax\n",6-argc);
-    return 1;
-  }
+  // if (argc < 6){
+  //   fprintf(ferr, "Lack of command line arguments. Check! Need %d more arguments, Level, tauy, We, Oh, tmax\n",6-argc);
+  //   return 1;
+  // }
 
   L0 = Ldomain;
   origin (0., 0.);
   init_grid (1 << 8);
   // Values taken from the terminal
-  MAXlevel = atoi(argv[1]);
-  J = atof(argv[2]); // plasto-capillary number
-  We = atof(argv[3]); // Weber number
-  Oh = atof(argv[4]); // Ohnesorge number
-  tmax = atof(argv[5]);
+  MAXlevel = 9; // atoi(argv[1]);
+  J = 1e0; // atof(argv[2]); // plasto-capillary number
+  We = 1e1; // atof(argv[3]); // Weber number
+  Oh = 1e-2; // atof(argv[4]); // Ohnesorge number
+  tmax = 1e0; // atof(argv[5]);
 
   fprintf(ferr, "Level %d, We %2.1e, Oh %2.1e, J %4.3f\n", MAXlevel, We, Oh, J);
 
@@ -102,7 +101,7 @@ int  main(int argc, char const *argv[]) {
   */
 
   // epsilon = t < tsnap ? 1e-1 : 1e-3;  // epsilon regularisation value of effective viscosity
-  epsilon = 1e-3;  // epsilon regularisation value of effective viscosity
+  epsilon = 1e-2;  // epsilon regularisation value of effective viscosity
   rho1 = 1., rho2 = RHO21;
   mu1 = Oh/sqrt(We), mu2 = MU21*Oh/sqrt(We);
   f.sigma = 1.0/We;

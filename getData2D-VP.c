@@ -7,16 +7,14 @@
 #include "utils.h"
 #include "output.h"
 
-scalar f[];
+scalar f[], D2[];
 vector u[];
-scalar A11[], A12[], A22[]; // conformation tensor
-scalar conform_qq[];
 
 char filename[80];
 int nx, ny, len;
 double xmin, ymin, xmax, ymax, Deltax, Deltay;
 
-scalar D2c[], vel[], trA[];
+scalar D2c[], vel[];
 scalar * list = NULL;
 
 int main(int a, char const *arguments[])
@@ -28,7 +26,6 @@ int main(int a, char const *arguments[])
 
   list = list_add (list, D2c);
   list = list_add (list, vel);
-  list = list_add (list, trA);
 
   /*
   Actual run and codes!
@@ -36,28 +33,25 @@ int main(int a, char const *arguments[])
   restore (file = filename);
 
   foreach() {
+    #if UseD2c
     double D11 = (u.y[0,1] - u.y[0,-1])/(2*Delta);
     double D22 = (u.y[]/y);
     double D33 = (u.x[1,0] - u.x[-1,0])/(2*Delta);
     double D13 = 0.5*( (u.y[1,0] - u.y[-1,0] + u.x[0,1] - u.x[0,-1])/(2*Delta) );
     double D2 = (sq(D11)+sq(D22)+sq(D33)+2.0*sq(D13));
-    D2c[] = f[]*D2;
+    D2c[] = f[]*(D2);
     
     if (D2c[] > 0.){
       D2c[] = log(D2c[])/log(10);
     } else {
       D2c[] = -10;
     }
+    #else
+    D2c[] = D2[];
+    #endif
 
     vel[] = sqrt(sq(u.x[])+sq(u.y[]));
 
-    trA[] = (A11[] + A22[] + conform_qq[])/3.0 - 1.0;
-
-    if (trA[] > 0.){
-      trA[] = log(trA[])/log(10);
-    } else {
-      trA[] = -10;
-    }
 
   }
 
