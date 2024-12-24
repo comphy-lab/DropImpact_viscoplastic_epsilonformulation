@@ -6,6 +6,8 @@ This project contains C implementations for simulating two-phase flows, such as 
 
 - `bounce.c`: Implementation of bouncing bubble simulation
 - `two-phaseVP.h`: Header file for two-phase flow simulations
+- `run_run.sh`: The script file for running the simulations in parallel. 
+- `run_post.sh`: The script file for postprocess in parallel. 
 
 ## Prerequisites
 
