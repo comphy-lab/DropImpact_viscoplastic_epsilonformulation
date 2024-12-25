@@ -131,9 +131,9 @@ event adapt(i++)
     }
     adapt_wavelet((scalar *){f, u.x, u.y, KAPPA, D2c}, (double[]){fErr, VelErr, VelErr, KAPPAErr, D2Err}, MAXlevel);
   }
-  // if (t>1){
-  //   DT=1e-4;
-  // }
+  if (t>1){
+    DT=1e-4;
+  }
 }
 
 /**
@@ -217,7 +217,7 @@ event postProcess(t = 0; t += tsnap; t <= tmax)
   double x_min = Ldomain;
   face vector s[];
   s.x.i = -1;
-  foreach ()
+  foreach (reduction(min: x_min))
   {
     if (f[] > 1e-6 && f[] < 1. - 1e-6 && d[] == MainPhase)
     {
