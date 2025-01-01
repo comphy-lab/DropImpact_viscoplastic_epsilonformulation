@@ -1,8 +1,15 @@
 /**
  * Modification by Vatsal Sanjay 
- * Version 3.0, Oct 11, 2024
+ * Version 4.0, Jan 1, 2025
 
 # Changelog
+
+## Jan 1, 2025 (v4.0)
+- There was a bug in calculation of D2 which would trigger while using parallel computing only. This has been fixed.
+
+## Dec 31, 2024 (v3.5)
+- Added the Herschel-Bulkley formulation. n = 1 recovers the Bingham formulation. n = 1, tau_y = 0 recovers the Newtonian formulation.
+
 ## Oct 11, 2024 (v2.0) 
 - Using the epsilon formulation for the viscoplastic fluid.
 - Unified the code to handle both planar and axi-symmetric cases seamlessly. This eliminates the need for a separate codebase when switching to axi-symmetric formulations.
@@ -31,7 +38,7 @@ scalar f[], * interfaces = {f};
 scalar D2[];
 face vector D2f[];
 double rho1 = 1., mu1 = 0., rho2 = 1., mu2 = 0.;
-double epsilon = 1e-6, tauy = 0.;
+double epsilon = 1e-6, tauy = 0., n = 1.;
 /**
 Auxilliary fields are necessary to define the (variable) specific
 volume $\alpha=1/\rho$ as well as the cell-centered density. */
@@ -108,42 +115,73 @@ event tracer_advection (i++) {
 event properties (i++) {
 /**
 This is the part where we have made changes.
+# Herschel–Bulkley formulation for non-Newtonian flows
+## Features:
+* Yield stress $\tau_y$
+* Power law dependance on the strain rate
+	* Shear thinning for $n < 1$. 
+	* Shear thickening for $n > 1$. 
+* Bingham model for $n = 1$. 
+* Newtonian fluid for $n = 1$ and $\tau_y = 0$. 
+
+## $\varepsilon$-formulation
+$$
+\boldsymbol{\tau} = 
+\tau_{y}\,\boldsymbol{\mathcal{I}} \;+\; K\left(2\boldsymbol{\mathcal{D}}\right)^{n}
+=
+2\biggl[\frac{\tau_{y}}{2\|\boldsymbol{\mathcal{D}}\|+\varepsilon}\,\boldsymbol{\mathcal{I}}
++
+K\,\bigl(2\|\boldsymbol{\mathcal{D}}\|+\epsilon\bigr)^{n-1}
+\biggr]\boldsymbol{\mathcal{D}}.
+$$
+Normalizing stresses with $\gamma/R_0$, length with $R_0$, and velocity with $\sqrt{\gamma/\rho_lR_0}$...
+
+
+$$
+\boldsymbol{\tilde{\tau}} =
+2\biggl[\frac{\mathcal{J}}{2\|\boldsymbol{\tilde{\mathcal{D}}}\|+\varepsilon}\,\boldsymbol{\mathcal{I}}
++
+Oh_K\,\bigl(2\|\boldsymbol{\tilde{\mathcal{D}}}\|+\epsilon\bigr)^{n-1}
+\biggr]\boldsymbol{\tilde{\mathcal{D}}}.
+$$
+
+Here, the effective Ohnesorge is
+
+$$
+Oh_K = \frac{K}{\sqrt{\rho_l^n\gamma^{2-n}R_0^{3n-2}}}
+$$
+One can easily see that putting $n = 1$ recovers the Bingham model with $Oh = \eta_l/\sqrt{\rho_l\gamma R_0}$. Additionally, with $n = 1$ & $\mathcal{J}$ = 0, the model will give a `Newtonian` response. 
+
+## More details on the implementation
+
+### Calculate the norm of the deformation tensor $\boldsymbol{\mathcal{D}}$:
 $$\mathcal{D}_{11} = \frac{\partial u_r}{\partial r}$$
-
 $$\mathcal{D}_{22} = \frac{u_r}{r}$$
-
-$$\mathcal{D}_{13} = \frac{1}{2}\left( \frac{\partial u_r}{\partial z}+ \frac{\partial u_z}{\partial r}\right)$$
-
-$$\mathcal{D}_{31} = \frac{1}{2}\left( \frac{\partial u_z}{\partial r}+ \frac{\partial u_r}{\partial z}\right)$$
-
+$$\mathcal{D}_{13} = \frac{1}{2}\left( \frac{\partial u_r}{\partial z}+ \frac{\partial u_z}{\partial r}\right)$$$$\mathcal{D}_{31} = \frac{1}{2}\left( \frac{\partial u_z}{\partial r}+ \frac{\partial u_r}{\partial z}\right)$$
 $$\mathcal{D}_{33} = \frac{\partial u_z}{\partial z}$$
-
 $$\mathcal{D}_{12} = \mathcal{D}_{23} = 0.$$
-
 The second invariant is $\mathcal{D}_2=\sqrt{\mathcal{D}_{ij}\mathcal{D}_{ij}}$ (this is the Frobenius norm)
+
 $$\mathcal{D}_2^2= \mathcal{D}_{ij}\mathcal{D}_{ij}= \mathcal{D}_{11}\mathcal{D}_{11} + \mathcal{D}_{22}\mathcal{D}_{22} + \mathcal{D}_{13}\mathcal{D}_{31} + \mathcal{D}_{31}\mathcal{D}_{13} + \mathcal{D}_{33}\mathcal{D}_{33}$$
 
 **Note:** $\|\mathcal{D}\| = D_2/\sqrt{2}$.<br/>
 
-We use the formulation as given in [Balmforth et al. (2013)](https://www.annualreviews.org/doi/pdf/10.1146/annurev-fluid-010313-141424), they use $\dot \gamma$ 
-which is by their definition $\sqrt{\frac{1}{2}\dot \gamma_{ij} \dot \gamma_{ij}}$
-and as $\dot \gamma_{ij}=2 D_{ij}$
+We use the formulation as given in [Balmforth et al. (2013)](https://www.annualreviews.org/doi/pdf/10.1146/annurev-fluid-010313-141424) [@balmforthYieldingStressRecent2014], who use the strain rate tensor $\boldsymbol{\dot{\mathcal{S}}}$ which and its norm $\sqrt{\frac{1}{2}\dot{\mathcal{S}_{ij}}\dot{\mathcal{S}_{ij}}}$. Of course, given $\dot{\mathcal{S}}_{ij}=2 D_{ij}$.
 
-Therefore, $\dot \gamma$ = $\sqrt{2} \mathcal{D}_2$, that is why we have a $\sqrt{2}$ in the equations.
+### Calculate the equivalent viscosity
 
-Factorising with $2  \mathcal{D}_{ij}$ to obtain an equivalent viscosity
-  $$\tau_{ij} = 2( \mu_0 + \frac{\tau_y}{2 \|\mathcal{D}\| } ) D_{ij}=2( \mu_0 + \frac{\tau_y}{\sqrt{2} \mathcal{D}_2 } ) \mathcal{D}_{ij} $$
-As defined by [Balmforth et al. (2013)](https://www.annualreviews.org/doi/pdf/10.1146/annurev-fluid-010313-141424)
-$$\tau_{ij} = 2 \mu_{eq}  \mathcal{D}_{ij} $$
-with
-$$\mu_{eq}= \mu_0 + \frac{\tau_y}{\sqrt{2} \mathcal{D}_2 }$$
+Factorizing with $2 \mathcal{D}_{ij}$ to obtain an equivalent viscosity
+$$\eta_{\text{eff}} = \frac{\mathcal{J}}{2\|\boldsymbol{\tilde{\mathcal{D}}}\|+\varepsilon}\,\boldsymbol{\mathcal{I}}
++
+Oh_K\,\bigl(2\|\boldsymbol{\tilde{\mathcal{D}}}\|+\epsilon\bigr)^{n-1}
+$$
 
-In this updated formulation, the viscosity is defined as follows:
-$$\mu = \frac{\tau_y}{2|\mathcal{D}| + \epsilon} + \mu_0$$
-where $\epsilon$ is a small number to ensure numerical stability. The term $\frac{\tau_y}{\epsilon} + \mu_0$ is equivalent to the $\mu_{max}$ of the previous (v1.0, see: git@github.com:VatsalSy/Bursting-Bubble-In-a-Viscoplastic-Medium.git) formulation.
+In this formulation, $\varepsilon$ is a small number to ensure numerical stability. 
+The term $$\frac{\tau_y}{\varepsilon} + ...$$is equivalent to the $\mu_{max}$ of the previous (v1.0, see: [GitHub](git@github.com:VatsalSy/Bursting-Bubble-In-a-Viscoplastic-Medium.git)) formulation [@sanjayBurstingBubbleViscoplastic2021].
 
-The fluid flows always, it is not a solid, but a very viscous fluid.
-
+  
+**Note:** The fluid flows always, it is not a solid, but a very viscous fluid.
+ 
 Reproduced from: [P.-Y. Lagrée's Sandbox](http://basilisk.fr/sandbox/M1EMN/Exemples/bingham_simple.c). Here, we use a face implementation of the regularisation method, described [here](http://basilisk.fr/sandbox/vatsal/GenaralizedNewtonian/Couette_NonNewtonian.c).
 */
 
@@ -160,13 +198,13 @@ Reproduced from: [P.-Y. Lagrée's Sandbox](http://basilisk.fr/sandbox/M1EMN/Exem
 #if AXI
     D2temp += sq((u.y[0,0] + u.y[-1, 0])/(2*max(y, 1e-20))); // D22
 #endif
-    D2temp += sq((u.x[0,1] - u.x[0,-1] + u.x[-1,1] - u.x[-1,-1])/(2.*Delta)); // D33
-    D2temp += sq(0.5*( (u.y[0,1] - u.y[0,-1] + u.y[-1,1] - u.y[-1,-1])/Delta + 0.5*( (u.x[0,1] - u.x[0,-1] + u.x[-1,1] - u.x[-1,-1])/(2.*Delta) ))); // D13
+    D2temp += sq((u.x[] - u.x[-1,0])/Delta); // D33
+    D2temp += 2.0*sq(0.5*( (u.y[] - u.y[-1, 0])/Delta + 0.5*( (u.x[0,1] - u.x[0,-1] + u.x[-1,1] - u.x[-1,-1])/(2.*Delta) ) )); // D13
 
-    D2temp = sqrt(D2temp);
+    D2temp = sqrt(D2temp/2.0);
 
     if (tauy > 0.){
-      muTemp = tauy/(sqrt(2.)*D2temp + epsilon) + mu1;
+      muTemp = tauy/(2.0*D2temp + epsilon) + mu1*pow((2.0*D2temp + epsilon), n-1);
     }
     
     muv.x[] = fm.x[]*mu(muTemp, mu2, ff);
@@ -186,12 +224,12 @@ Reproduced from: [P.-Y. Lagrée's Sandbox](http://basilisk.fr/sandbox/M1EMN/Exem
     D2temp += sq((u.y[0,0] + u.y[0,-1])/(2*max(y, 1e-20))); // D22
 #endif
     D2temp += sq(0.5*( (u.x[1,0] - u.x[-1,0] + u.x[1,-1] - u.x[-1,-1])/(2.*Delta) )); // D33
-    D2temp += sq(0.5*( (u.x[0,0] - u.x[0,-1])/Delta + 0.5*( (u.y[1,0] - u.y[-1,0] + u.y[1,-1] - u.y[-1,-1])/(2.*Delta) ) )); // D13
+    D2temp += 2.0*sq(0.5*( (u.x[0,0] - u.x[0,-1])/Delta + 0.5*( (u.y[1,0] - u.y[-1,0] + u.y[1,-1] - u.y[-1,-1])/(2.*Delta) ) )); // D13
 
-    D2temp = sqrt(D2temp);
+    D2temp = sqrt(D2temp/2.0);
 
     if (tauy > 0.){
-      muTemp = tauy/(sqrt(2.)*D2temp + epsilon) + mu1;
+      muTemp = tauy/(2.0*D2temp + epsilon) + mu1*pow((2.0*D2temp + epsilon), n-1);
     }
 
     muv.y[] = fm.y[]*mu(muTemp, mu2, ff);
@@ -208,11 +246,6 @@ Reproduced from: [P.-Y. Lagrée's Sandbox](http://basilisk.fr/sandbox/M1EMN/Exem
   foreach(){
     rhov[] = cm[]*rho(sf[]);
     D2[] = f[]*(D2f.x[]+D2f.y[]+D2f.x[1,0]+D2f.y[0,1])/4.;
-    if (D2[] > 0.){
-      D2[] = log(D2[])/log(10);
-    } else {
-      D2[] = -10;
-    }
   }
 #if TREE
   sf.prolongation = fraction_refine;
