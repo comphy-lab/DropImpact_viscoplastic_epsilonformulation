@@ -13,8 +13,6 @@ from matplotlib.ticker import StrMethodFormatter
 import multiprocessing as mp
 from functools import partial
 import argparse  # Add at top with other imports
-from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
-import sys
 import subprocess
 
 import matplotlib.colors as mcolors
@@ -176,15 +174,8 @@ def process_timestep(ti, tSNAP,folder, GridsPerR, rmin, rmax, zmin, zmax, lw):
     plt.savefig(name, bbox_inches="tight")
     plt.close()
 
-def create_video_from_images(image_folder, output_file, fps=24):
-    images = sorted([os.path.join(image_folder, img) for img in os.listdir(image_folder) if img.endswith('.png')])
-    clip = ImageSequenceClip(images, fps=fps)
-    clip.write_videofile(output_file, codec="libx264", audio=False)
-
 def main():
     # Get number of CPUs from command line argument, or use all available
-    import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--CPUs', type=int, default=mp.cpu_count(), help='Number of CPUs to use')
     parser.add_argument('--tMAX', type=float, default=10.0, help='tMAX')
@@ -192,7 +183,6 @@ def main():
     parser.add_argument('--ZMAX', type=float, default=4.0, help='Maximum Z value')
     parser.add_argument('--RMAX', type=float, default=4.0, help='Maximum R value')
     parser.add_argument('--ZMIN', type=float, default=0.0, help='Minimum Z value')
-    parser.add_argument('--video_file', default="a.mp4", help='file')
     args = parser.parse_args()
 
     CPUStoUse = args.CPUs
@@ -201,7 +191,6 @@ def main():
     ZMAX = args.ZMAX
     RMAX = args.RMAX
     ZMIN = args.ZMIN
-    video_file = args.video_file
 
     nGFS=int(tMAX/tSNAP)
     
@@ -224,10 +213,6 @@ def main():
                              zmin=zmin, zmax=zmax, lw=lw)
         # Map the process_func to all timesteps
         pool.map(process_func, range(nGFS))
-
-    # video_file = "simulation_video.mp4"
-    create_video_from_images("Video", video_file, fps=24)
-    print(f"Video saved to {video_file}")      
 
 if __name__ == "__main__":
     compile_executable()

@@ -15,7 +15,7 @@ Id 1 is for the Viscoplastic liquid drop, and Id 2 is Newtonian gas.
 /**
 To model Viscoplastic liquids, we use a modified version of [two-phase.h](http://basilisk.fr/src/two-phase.h). [two-phaseVP.h](two-phaseVP.h) contains these modifications.
 */
-#include "two-phaseVP-HB.h"
+#include "two-phaseVP.h"
 /**
  You can use: conserving.h as well. Even without it, I was still able to conserve the total energy (also momentum?) of the system if I adapt based on curvature and vorticity/deformation tensor norm (see the adapt even). I had to smear the density and viscosity anyhow because of the sharp ratios in liquid (Bingham) and the gas.
 */
@@ -30,9 +30,9 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 
 // Error tolerancs
 #define fErr (1e-3)     // error tolerance in VOF
-#define KErr (1e-2)     // error tolerance in KAPPA
+#define KErr (1e-6)     // error tolerance in KAPPA
 #define VelErr (1e-2)   // error tolerances in velocity
-#define DissErr (1e-2)  // error tolerances in dissipation
+#define DissErr (1e-5)  // error tolerances in dissipation
 #define OmegaErr (1e-2) // error tolerances in vorticity
 
 // gas properties!
@@ -73,12 +73,11 @@ int main(int argc, char const *argv[])
   epsilon = atof(argv[6]); // 1e-2
   tmax = atof(argv[7]);    // 10
   Ldomain = atof(argv[8]); // 8
-  DT = atof(argv[9]); // 1e-3
-  CFL = atof(argv[10]); // 1e-3
-  sprintf(resultsName, "%s", argv[10]); 
-  fprintf(ferr, "Ldomain %4.3e, tmax %4.3e, Level %d, We %2.1e, Oh %2.1e, Bo %2.1e, J %4.3f, epsilon %4.3e, DT %4.3e, CFL %4.3e\n", Ldomain, tmax, MAXlevel, We, Oh, Bo, J, epsilon, DT, CFL);
+  sprintf(resultsName, "%s", argv[9]); 
+  fprintf(ferr, "Ldomain %4.3e, tmax %4.3e, Level %d, We %2.1e, Oh %2.1e, Bo %2.1e, J %4.3f, epsilon %4.3e\n", Ldomain, tmax, MAXlevel, We, Oh, Bo, J, epsilon);
 
   L0 = Ldomain;
+  DT = 1e-6;
   NITERMAX = 1000;
 
   char comm[80];
@@ -95,6 +94,9 @@ int main(int argc, char const *argv[])
 
 event init(t = 0)
 {
+  // sprintf(dumpFile, "dump");
+  // if (!restore(file = dumpFile))
+  // {
   refine(R2Drop(x, y) < 1.05 && (level < MAXlevel));
   fraction(f, 1. - R2Drop(x, y));
   foreach ()
@@ -102,6 +104,7 @@ event init(t = 0)
     u.x[] = -1.0 * f[];
     u.y[] = 0.0;
   }
+  // }
 }
 
 /**
@@ -131,7 +134,10 @@ event adapt(i++)
                   MAXlevel, MINlevel);
     unrefine(x > 0.95 * Ldomain); // ensure there is no backflow from the outflow walls!
   }
-  if (t>5){
+  if (t>1.0){
+    DT=1e-4;
+  }
+  if (t>5.0){
     DT=1e-3;
   }
 }
@@ -142,7 +148,7 @@ event adapt(i++)
 event writingFiles(t = 0; t += tsnap; t <= tmax+tsnap)
 {
   p.nodump = false;
-  dump(file = "dump");
+  dump(file = dumpFile);
   sprintf(nameOut, "intermediate/snapshot-%5.4f", t);
   dump(file = nameOut);
 }
@@ -181,23 +187,24 @@ event postProcess(t += tsnap)
   }
 
   // Any connected region for f > threshold is given a unique tag from 0 to n-1
-  int n_d = tag(d), size[n_d];
-  for (int i = 0; i < n_d; i++)
+  int n = tag(d), size[n];
+  for (int i = 0; i < n; i++)
   {
     size[i] = 0;
   }
 
-  foreach (serial)
+  // size array stores the size of each connected region
+  foreach_leaf()
+  {
     if (d[] > 0)
+    {
       size[((int)d[]) - 1]++;
-  #if _MPI
-    MPI_Allreduce(MPI_IN_PLACE, size, n_d, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  #endif
-
+    }
+  }
   // MainPhase is the tag of the largest connected region
   int MaxSize = 0;
   int MainPhase = 0;
-  for (int i = 0; i < n_d; i++)
+  for (int i = 0; i < n; i++)
   {
     // fprintf(ferr, "%d %d\n",i, size[i]);
     if (size[i] > MaxSize)
@@ -207,33 +214,22 @@ event postProcess(t += tsnap)
     }
   }
 
-  double ke = 0., vcm = 0., vcm1 = 0., vc = 0., vc1 = 0., dm = 0., dm1 = 0.;
+  double ke = 0., vcm = 0., vcm1 = 0.;
   face vector s[];
   s.x.i = -1;
-  double yMax = 0;
-  double xMax = 0;
-  double xMin = Ldomain;
-  // double vR = 0., uH = 0.;
-  double vR = 0., xTP = 0.;
-  double uH = 0., yTP = 0.;
-
-  foreach (reduction(+ : ke) reduction(+ : vcm) reduction(+ : vcm1) reduction(+ : dm) reduction(+ : dm1))
+  double yMax = -HUGE;
+  double xMax = -HUGE;
+  double xMin = HUGE;
+  foreach (reduction(+ : ke) reduction(+ : vcm) reduction(+ : vcm1) reduction(max : yMax) reduction(max : xMax) reduction(min : xMin))
   {
     //vcm and vcm1 are used for the calculation of the normal force.
     vcm += (2 * pi * y) * (clamp(f[], 0., 1.) * u.x[]) * sq(Delta);
-    dm += (2 * pi * y) * (clamp(f[], 0., 1.)) * sq(Delta);
     ke += sq(Delta) * (2 * pi * y) * (sq(u.x[]) + sq(u.y[])) * rho(f[]) / 2.;
     if (d[] == MainPhase)
     {
       vcm1 += (2 * pi * y) * (clamp(f[], 0., 1.) * u.x[]) * sq(Delta);      
-      dm1 += (2 * pi * y) * (clamp(f[], 0., 1.)) * sq(Delta);      
-    }               
-  }
-  vc=vcm/dm;
-  vc1=vcm1/dm1;
-
-  foreach (serial){
-  //yMax,xMax and xMin anre the boundary of the main droplet
+    }
+    //yMax,xMax and xMin anre the boundary of the main droplet
     if (f[] > 1e-6 && f[] < 1. - 1e-6 && d[] == MainPhase)
     {
       coord n1 = facet_normal(point, f, s);
@@ -246,14 +242,12 @@ event postProcess(t += tsnap)
         if (y1 > yMax)
         {
           yMax = y1;
-          xTP = x1;          
         }
-        if (y1 < 0.01)
+        if (y1 < pow(0.5, MAXlevel) * Ldomain*1.5)
         {
           if (x1 > xMax)
           {
             xMax = x1;
-            yTP = y1;            
           }
         }
         if (x1 < xMin)
@@ -263,9 +257,6 @@ event postProcess(t += tsnap)
       }
     }    
   } 
-  vR = interpolate(u.y, xTP, yMax);
-  uH = interpolate(u.x, xMax, yTP);
-
   if (xMin < x_min_min)
   {
     x_min_min = xMin;
@@ -294,16 +285,16 @@ event postProcess(t += tsnap)
     if (i == 0)
     {
       fp1 = fopen("result", "w");
-      fprintf(fp1, "t,n,ke,vcm,vc,vcm1,vc1,Rmax,Zmax,Zmin,vR,uH,pforce\n");
+      fprintf(fp1, "t,n,ke,vcm,vcm1,Rmax,Zmax,Zmin,pforce\n");
       fclose(fp1);
     }
     fp1 = fopen("result", "a");
-    fprintf(fp1, "%g,%d,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g\n", t,n_d,ke,vcm,vc,vcm1,vc1,yMax,xMax,xMin,vR,uH,pforce);
+    fprintf(fp1, "%g,%d,%g,%g,%g,%g,%g,%g,%g\n", t,n,ke,vcm,vcm1,yMax,xMax,xMin,pforce);
     fclose(fp1);
   }
 
   // if ((t == tmax) || (t > 1 && (ke < 1e-6 || (x_min - x_min_min > pow(0.5, MAXlevel) * Ldomain))))
-  if ((t > tmax) || (t > 1 && (ke < 1e-6 || (xMin - x_min_min > 0.02))))
+  if ((t == tmax) || (t > 1 && (ke < 1e-6 || (xMin - x_min_min > 0.02))))
   {
     char comm[256];
     sprintf(comm, "cp result ../%s", resultsName);

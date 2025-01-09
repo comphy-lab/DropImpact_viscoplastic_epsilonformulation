@@ -74,12 +74,11 @@ int main(int argc, char const *argv[])
   tmax = atof(argv[7]);    // 10
   Ldomain = atof(argv[8]); // 8
   DT = atof(argv[9]); // 1e-3
-  CFL = atof(argv[10]); // 1e-3
   sprintf(resultsName, "%s", argv[10]); 
-  fprintf(ferr, "Ldomain %4.3e, tmax %4.3e, Level %d, We %2.1e, Oh %2.1e, Bo %2.1e, J %4.3f, epsilon %4.3e, DT %4.3e, CFL %4.3e\n", Ldomain, tmax, MAXlevel, We, Oh, Bo, J, epsilon, DT, CFL);
+  fprintf(ferr, "Ldomain %4.3e, tmax %4.3e, Level %d, We %2.1e, Oh %2.1e, Bo %2.1e, J %4.3f, epsilon %4.3e, DT %4.3e\n", Ldomain, tmax, MAXlevel, We, Oh, Bo, J, epsilon, DT);
 
   L0 = Ldomain;
-  NITERMAX = 1000;
+  NITERMAX = 500;
 
   char comm[80];
   sprintf(comm, "mkdir -p intermediate");
@@ -90,6 +89,7 @@ int main(int argc, char const *argv[])
   f.sigma = 1.0 / We;
   tauy = J / We;
   G.x = -Bo / We; // uncomment only if Gravity is needed!
+  CFL = 1e-1;
   run();
 }
 
@@ -303,7 +303,7 @@ event postProcess(t += tsnap)
   }
 
   // if ((t == tmax) || (t > 1 && (ke < 1e-6 || (x_min - x_min_min > pow(0.5, MAXlevel) * Ldomain))))
-  if ((t > tmax) || (t > 1 && (ke < 1e-6 || (xMin - x_min_min > 0.02))))
+  if ((t > tmax - tsnap) || (t > 1 && (ke < 1e-6 || (xMin - x_min_min > 0.02))))
   {
     char comm[256];
     sprintf(comm, "cp result ../%s", resultsName);

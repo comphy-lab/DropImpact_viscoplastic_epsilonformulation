@@ -18,34 +18,48 @@ def compile_executable():
     if result.returncode != 0:
         raise RuntimeError("Compilation of getResults.c failed!")
 
-def get_results(filename):
+def run_executable(executable, args):
     """
-    Calls the getResults executable and parses its stderr output.
-    Assumes the first line of stderr contains at least 15 space-separated float values:
-        t, n, xTip, vTip,kappaTip, xTop, vTop, kappamax,
-        xcmax, ycmax, thetap, R_max,R_max_bottom,
-        x_top_droplet,r_top_droplet,u_top_droplet,
-        vb,xb,ke,pforce
-    
-    Returns a 20-element tuple of floats or (None,)*20 on parsing failure.
+    Runs the specified executable with the given arguments and attempts to parse
+    all floating-point values from the first line of the stderr output.
+
+    If parsing or execution fails, this function returns an empty tuple.
+
+    Parameters
+    ----------
+    executable : str
+        The name or path of the executable, e.g. "./getResults".
+    args : list
+        A list of arguments passed to the executable, e.g. ["filename"].
+
+    Returns
+    -------
+    tuple of float
+        A tuple containing all parsed floats from the first line of stderr.
+        Returns an empty tuple if parsing or execution fails.
     """
     try:
         completed = subprocess.run(
-            ["./getResults", filename],
+            [executable, *args],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             check=True
         )
+        # Split the stderr output into lines
         lines = completed.stderr.strip().split("\n")
+
         if lines:
+            # Split the first line by whitespace
             parts = lines[0].split()
-            if len(parts) >= 20:
-                return tuple(float(x) for x in parts[:20])
+            # Convert each part to float
+            return tuple(float(x) for x in parts)
     except (subprocess.CalledProcessError, ValueError) as e:
-        print(f"Error running getResults on {filename}: {e}")
-    
-    return (None,) * 20
+        print(f"Error running {executable} with args {args}: {e}")
+
+    # If there's an error or no lines, return an empty tuple
+    return ()
+
 
 def process_time_step(ti, tsnap):
     """
@@ -56,13 +70,11 @@ def process_time_step(ti, tsnap):
       4. Return the parsed data if successful, otherwise None
     """
     t = tsnap * ti
-    filepath = f"intermediate/snapshot-{t:.4f}"
-    
+    filepath = f"intermediate/snapshot-{t:.4f}"    
     if not os.path.exists(filepath):
         # print(f"File not found: {filepath}")
-        return None
-    
-    data = get_results(filepath)
+        return None    
+    data = run_executable("./getResults",filepath)
     # If any value in 'data' is None, we consider it a parsing failure.
     if any(v is None for v in data):
         return None
@@ -214,30 +226,69 @@ def plot_Top(output_results_csv,output_top_fig):
 
     print(f"Plot created and saved as {output_top_fig}.")
 
+def process_EpsForce(ti, tsnap,Oh,We,J):
+    t = tsnap * ti
+    filepath = f"intermediate/snapshot-{t:.4f}"    
+    if not os.path.exists(filepath):
+        print(f"File not found: {filepath}")
+        return None    
+    data = run_executable("./getEpsForce",[filepath,Oh,We,J])
+    # If any value in 'data' is None, we consider it a parsing failure.
+    if any(v is None for v in data):
+        return None    
+    return data
+
+def getEpsForces(tsnap, tmax, epsForce_csv, Oh, We, J):
+    nsteps = int(tmax / tsnap)    
+    if os.path.exists(epsForce_csv):
+        os.remove(epsForce_csv)
+    process_func = partial(process_EpsForce, tsnap=tsnap,Oh=Oh,We=We,J=J)
+    # Parallel processing using a process pool
+    with mp.Pool(processes=mp.cpu_count()) as pool:
+        results = pool.map(process_func, range(1, nsteps + 1))
+    for i in range(nsteps + 1):
+        results=process_func(i)
+    # Write results to a CSV file
+    header = ["t","epsOh","epsJ","pforce","betaMax","vBeta","Hmax","vH"]    
+    with open(epsForce_csv, "w", newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(header)
+        for row in results:
+            if row is not None:
+                writer.writerow(row)
+    print(f"Parallel processing finished. Results have been written to {epsForce_csv}.")
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--tMAX', type=float, default=10.0, help='tMAX')
-    parser.add_argument('--tSNAP', type=float, default=10.0, help='tSNAP')
+    parser.add_argument('--tSNAP', type=float, default=0.01, help='tSNAP')
+    parser.add_argument('--We', type=float, default=10.0, help='We')
+    parser.add_argument('--Oh', type=float, default=0.01, help='Oh')
+    parser.add_argument('--J', type=float, default=0.0, help='J')
     args = parser.parse_args()
     tsnap = args.tSNAP
     tmax = args.tMAX
+    We = args.We
+    Oh = args.Oh
+    J = args.J
     #  file dirs
     current_folder = os.path.basename(os.path.dirname(__file__))
     output_results_csv = f"results_{current_folder}.csv"
     output_force_csv = f"force_{current_folder}.csv"
     output_force_fig=f"figure_force_{current_folder}.png"
     output_top_fig=f"figure_tip_{current_folder}.png"
-
+    epsForce_csv=f"epsForce_{current_folder}.csv"
     # Step 1: Process and write results
-    results = process_and_write_results(tsnap, tmax, output_results_csv)
-
+    # results = process_and_write_results(tsnap, tmax, output_results_csv)
+    getEpsForces(tsnap, tmax, epsForce_csv, Oh, We, J)
     # Step 2: Compute derivatives and write to a separate CSV
-    tp, F_vb, F_xb, pforce = compute_and_write_derivatives(results, output_force_csv)
+    # tp, F_vb, F_xb, pforce = compute_and_write_derivatives(results, output_force_csv)
 
     # Step 3: Plot force results
-    plot_forces(tp, F_vb, F_xb, pforce, output_force_fig)
+    # plot_forces(tp, F_vb, F_xb, pforce, output_force_fig)
 
     # Step 4: Plot vTP and kappaTip
-    plot_Top(output_results_csv,output_top_fig)
+    # plot_Top(output_results_csv,output_top_fig)

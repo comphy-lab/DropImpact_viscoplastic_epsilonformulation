@@ -104,7 +104,7 @@ int main(int a, char const *arguments[])
   double kappamax = -HUGE;
 
   // Finding the tip position
-  foreach(){
+  foreach(reduction(max:kappamax)){
     
     // if (kappa[] != nodata && x < 0. && f[] < 1-1e-6 && y > 0.1 && x > -1.5 && y < 1)
     if (kappa[] != nodata && f[] < 1-1e-6)
