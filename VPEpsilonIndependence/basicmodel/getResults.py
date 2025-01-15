@@ -52,7 +52,6 @@ def process_Results(ti, tsnap,Oh,We,J):
     if any(v is None for v in data):
         return None 
     print(f"[PID {mp.current_process().pid}] Successfully processed: {filepath}", flush=True)   
-    print(f"Data {data}", flush=True)   
     return data
 
 def getResults(tsnap, tmax, results_csv, Oh, We, J, CPUStoUse):

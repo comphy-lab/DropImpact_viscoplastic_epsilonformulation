@@ -78,7 +78,7 @@ int main(int argc, char const *argv[])
 
   //log
   fprintf(ferr, "We,Oh,J,MAXlevel,epsilon,MU21,DT,Ldomain,tmax,Bo\n");
-  fprintf(ferr, "%g,%g,%g,%d,%4.3e,%g,%g,%g,%g,%g,%d\n", We, Oh, J, MAXlevel, epsilon, MU21, DT, Ldomain, tmax, Bo);
+  fprintf(ferr, "%g,%g,%g,%d,%4.3e,%g,%g,%g,%g,%g\n", We, Oh, J, 13, epsilon, MU21, DT, Ldomain, tmax, Bo);
   
   L0 = Ldomain;
   NITERMAX = 500;
@@ -102,6 +102,13 @@ event init(t = 0)
   }
 }
 
+int refRegion(double x, double y, double z){
+  return (((y < 2.0 && x < 0.002) || (y < 0.002)) ? (MAXlevel < 13 ? 13 : MAXlevel):
+          ((y < 2.0 && x < 0.005) || (y < 0.005)) ? (MAXlevel < 12 ? 12 : MAXlevel):
+          ((y < 2.0 && x < 0.01) || (y < 0.01)) ? (MAXlevel < 11 ? 11 : MAXlevel):
+          ((y < 2.0 && x < 0.02) || (y < 0.02)) ? (MAXlevel < 10 ? 10 : MAXlevel):
+          MAXlevel);
+}
 /**
 ## Adaptive Mesh Refinement
 */
@@ -124,9 +131,9 @@ event adapt(i++)
       double D2 = (sq(D11) + sq(D22) + sq(D33) + 2.0 * sq(D13));
       D2c[] = f[] * D2;
     }
-    adapt_wavelet((scalar *){f, KAPPA, u.x, u.y, D2c},
-                  (double[]){fErr, KErr, VelErr, VelErr, DissErr},
-                  MAXlevel, MINlevel);
+    adapt_wavelet_limited((scalar *){f, KAPPA, u.x, u.y, D2c},
+              (double[]){fErr, KErr, VelErr, VelErr, DissErr},
+              refRegion, MINlevel);
     unrefine(x > 0.95 * Ldomain);
   }
   if (t>5){
@@ -152,7 +159,7 @@ event writingFiles(t += tsnap)
 
 double t_last = 0.0;
 double DeltaT = 0.0;
-double x_min_min = 0;
+double x_min_min = HUGE;
 event postProcess(t += tsnap)
 {
   scalar d[];
@@ -185,7 +192,7 @@ event postProcess(t += tsnap)
     }
   }
 
-  double ke = 0., xMin = Ldomain;
+  double ke = 0., xMin = 0.;
   foreach (reduction(+ : ke) reduction(min : xMin)){
     ke += sq(Delta) * (2 * pi * y) * (sq(u.x[]) + sq(u.y[])) * rho(f[]) / 2.;
     if (d[] == MainPhase){
@@ -210,7 +217,7 @@ event postProcess(t += tsnap)
     fprintf(fp1, "%g,%d,%d,%g,%g,%g,%g,%g\n", t,i,grid->tn,perf.t / 60.0, DeltaT,ke,xMin,xMin-x_min_min);fflush(fp1);
   }
 
-  if ((t > tmax - tsnap) || (t > 1 && (ke < 1e-6 || (xMin - x_min_min > 0.02))))
+  if ((t > tmax-tsnap) || (ke < 1e-6) || (xMin - x_min_min > 0.02))
   {
     char comm[256];
     sprintf(comm, "cp log_run ../Results_Running/log_%s.csv", resultsName);
