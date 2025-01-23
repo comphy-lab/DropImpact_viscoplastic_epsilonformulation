@@ -81,7 +81,7 @@ int main(int argc, char const *argv[])
   fprintf(ferr, "%g,%g,%g,%d,%4.3e,%g,%g,%g,%g,%g\n", We, Oh, J, MAXlevel, epsilon, MU21, DT, Ldomain, tmax, Bo);
   
   L0 = Ldomain;
-  NITERMAX = 500;
+  NITERMAX = 1000;
 
   rho1 = 1., rho2 = RHO21;
   mu1 = Oh / sqrt(We), mu2 = MU21 * Oh / sqrt(We);
@@ -152,7 +152,7 @@ event writingFiles(t += tsnap)
 
 double t_last = 0.0;
 double DeltaT = 0.0;
-double x_min_min = 0;
+double x_min_min = HUGE;
 event postProcess(t += tsnap)
 {
   scalar d[];
@@ -185,7 +185,7 @@ event postProcess(t += tsnap)
     }
   }
 
-  double ke = 0., xMin = Ldomain;
+  double ke = 0., xMin = HUGE;
   foreach (reduction(+ : ke) reduction(min : xMin)){
     ke += sq(Delta) * (2 * pi * y) * (sq(u.x[]) + sq(u.y[])) * rho(f[]) / 2.;
     if (d[] == MainPhase){
@@ -210,7 +210,7 @@ event postProcess(t += tsnap)
     fprintf(fp1, "%g,%d,%d,%g,%g,%g,%g,%g\n", t,i,grid->tn,perf.t / 60.0, DeltaT,ke,xMin,xMin-x_min_min);fflush(fp1);
   }
 
-  if ((t > tmax - tsnap) || (t > 1 && (ke < 1e-6 || (xMin - x_min_min > 0.02))))
+  if ((t > tmax - tsnap) || (t > 1 && (ke < 1e-6 || (xMin - x_min_min > 0.04))))
   {
     char comm[256];
     sprintf(comm, "cp log_run ../Results_Running/log_%s.csv", resultsName);
