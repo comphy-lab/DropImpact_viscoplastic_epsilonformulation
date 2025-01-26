@@ -59,7 +59,7 @@ int MAXlevel;
 double We, Oh, J, Bo;
 double tmax, Ldomain;
 char nameOut[80], resultsName[80], dumpFile[80];
-
+double DT_Value;
 int main(int argc, char const *argv[])
 {
   origin(0., 0.);
@@ -72,10 +72,10 @@ int main(int argc, char const *argv[])
   epsilon = atof(argv[6]); // 1e-2
   tmax = atof(argv[7]);    // 10
   Ldomain = atof(argv[8]); // 8
-  DT = atof(argv[9]); // 1e-3
+  DT_Value = atof(argv[9]); // 1e-3
   CFL = atof(argv[10]); // 1e-3
-  sprintf(resultsName, "%s", argv[11]); 
-
+  sprintf(resultsName, "%s", argv[11]);   
+  DT=(J>0.2?1e-6:DT_Value); //initial value
   //log
   fprintf(ferr, "We,Oh,J,MAXlevel,epsilon,MU21,DT,Ldomain,tmax,Bo\n");
   fprintf(ferr, "%g,%g,%g,%d,%4.3e,%g,%g,%g,%g,%g\n", We, Oh, J, MAXlevel, epsilon, MU21, DT, Ldomain, tmax, Bo);
@@ -136,6 +136,10 @@ event adapt(i++)
               refRegion, MINlevel);
     unrefine(x > 0.95 * Ldomain);
   }
+
+  if (t>0.2){
+    DT=DT_Value;
+  }
   if (t>5){
     DT=1e-3;
   }
@@ -161,7 +165,7 @@ event writingFiles(t += tsnap)
 
 double t_last = 0.0;
 double DeltaT = 0.0;
-double x_min_min = 0;
+double x_min_min = Ldomain;
 event postProcess(t += tsnap*0.1)
 {
   scalar d[];

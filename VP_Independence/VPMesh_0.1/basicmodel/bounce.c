@@ -38,7 +38,7 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 
 // gas properties!
 #define RHO21 (1e-3)
-#define MU21 (3e-3)
+#define MU21 (1e-2)
 
 // Distance and radius of drop calculations
 #define Xdist (1.02)
@@ -75,13 +75,10 @@ int main(int argc, char const *argv[])
   DT = atof(argv[9]); // 1e-3
   CFL = atof(argv[10]); // 1e-3
   sprintf(resultsName, "%s", argv[11]); 
-
-  //log
-  fprintf(ferr, "We,Oh,J,MAXlevel,epsilon,MU21,DT,Ldomain,tmax,Bo\n");
-  fprintf(ferr, "%g,%g,%g,%d,%4.3e,%g,%g,%g,%g,%g\n", We, Oh, J, MAXlevel, epsilon, MU21, DT, Ldomain, tmax, Bo);
   
   L0 = Ldomain;
-  NITERMAX = 2000;
+  NITERMAX = 200;
+  NITERMIN = 2;
 
   rho1 = 1., rho2 = RHO21;
   mu1 = Oh / sqrt(We), mu2 = MU21 * Oh / sqrt(We);
@@ -93,12 +90,18 @@ int main(int argc, char const *argv[])
 
 event init(t = 0)
 {
-  refine(R2Drop(x, y) < 1.05 && (level < MAXlevel));
-  fraction(f, 1. - R2Drop(x, y));
-  foreach ()
-  {
-    u.x[] = -1.0 * f[];
-    u.y[] = 0.0;
+  if(!restore (file = "dump",list = all)){
+    //log
+    fprintf(ferr, "We,Oh,J,MAXlevel,epsilon,MU21,DT,Ldomain,tmax,Bo\n");
+    fprintf(ferr, "%g,%g,%g,%d,%4.3e,%g,%g,%g,%g,%g\n", We, Oh, J, MAXlevel, epsilon, MU21, DT, Ldomain, tmax, Bo);
+    refine(R2Drop(x, y) < 1.05 && (level < MAXlevel));
+    fraction(f, 1. - R2Drop(x, y));
+    foreach ()
+    {
+      u.x[] = -1.0 * f[];
+      u.y[] = 0.0;
+    }
+    boundary((scalar *){f, u.x, u.y});
   }
 }
 
@@ -136,6 +139,7 @@ event adapt(i++)
               refRegion, MINlevel);
     unrefine(x > 0.95 * Ldomain);
   }
+  
   if (t>5){
     DT=1e-3;
   }
@@ -161,8 +165,7 @@ event writingFiles(t += tsnap)
 
 double t_last = 0.0;
 double DeltaT = 0.0;
-double x_min_min = 0;
-event postProcess(t += tsnap*0.1)
+event postProcess(t += tsnap)
 {
   scalar d[];
   double threshold = 1e-4;
@@ -194,30 +197,14 @@ event postProcess(t += tsnap*0.1)
     }
   }
 
-  double ke = 0., xMin = Ldomain, xMax = 0., vcm = 0., vcm1 = 0., vc = 0., vc1 = 0., dm = 0., dm1 = 0.;  
-  foreach (reduction(+ : ke) reduction(+ : vcm) reduction(+ : vcm1) reduction(+ : dm) reduction(+ : dm1) reduction(min : xMin)){
+  double ke = 0., xMin = Ldomain;  
+  foreach (reduction(+ : ke) reduction(min : xMin)){
     ke += (2 * pi * y) * (sq(u.x[]) + sq(u.y[])) * rho(f[]) / 2. * sq(Delta);
-    vcm += (2 * pi * y) * (clamp(f[], 0., 1.) * u.x[]) * sq(Delta);
-    dm += (2 * pi * y) * (clamp(f[], 0., 1.)) * sq(Delta);
     if (d[] == MainPhase){
       if ((x < xMin)){
         xMin = x;
       }      
-      vcm1 += (2 * pi * y) * (clamp(f[], 0., 1.) * u.x[]) * sq(Delta);      
-      dm1 += (2 * pi * y) * (clamp(f[], 0., 1.)) * sq(Delta);  
     }               
-  }
-  if (xMin < x_min_min){
-    x_min_min = xMin;
-  }
-  vc=vcm/dm;
-  vc1=vcm1/dm1;
-  foreach_boundary (bottom, reduction(max : xMax)){
-    if (d[] == MainPhase){
-      if ((x > xMax)){
-        xMax = x;
-      }
-    }
   }
 
   DeltaT = perf.t / 60.0 - t_last;
@@ -226,13 +213,13 @@ event postProcess(t += tsnap*0.1)
   if (pid() == 0){
     if (i == 0){
       fp1 = fopen("log_run", "w");   
-      fprintf(fp1, "t,i,Cell,Wallclocktime(min),CPUtime(min),vcm,vc,vcm1,vc1,xMax,ke,Zmin,Zmin1\n");fflush(fp1);
+      fprintf(fp1, "t,i,Cell,Wallclocktime(min),CPUtime(min),ke,Zmin\n");fflush(fp1);
     }
     fp1 = fopen("log_run", "a");  
-    fprintf(fp1, "%g,%d,%d,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g\n", t,i,grid->tn,perf.t / 60.0, DeltaT,vcm,vc,vcm1,vc1,xMax,ke,xMin,xMin-x_min_min);fflush(fp1);
+    fprintf(fp1, "%g,%d,%ld,%g,%g,%g,%g\n", t,i,grid->tn,perf.t / 60.0, DeltaT,ke,xMin);fflush(fp1);
   }
 
-  if ((t > tmax - tsnap) || (t > 1 && (ke < 1e-6 || (xMin - x_min_min > 0.04))))
+  if ((t > tmax - tsnap) || ( (ke < 1e-6 || (xMin > 0.04))))
   {
     char comm[256];
     sprintf(comm, "cp log_run ../Results_Running/log_%s.csv", resultsName);

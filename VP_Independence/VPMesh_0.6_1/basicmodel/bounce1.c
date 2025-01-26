@@ -58,6 +58,7 @@ u.n[top] = neumann(0.);
 int MAXlevel;
 double We, Oh, J, Bo;
 double tmax, Ldomain;
+double DT_value;
 char nameOut[80], resultsName[80], dumpFile[80];
 
 int main(int argc, char const *argv[])
@@ -72,16 +73,14 @@ int main(int argc, char const *argv[])
   epsilon = atof(argv[6]); // 1e-2
   tmax = atof(argv[7]);    // 10
   Ldomain = atof(argv[8]); // 8
-  DT = atof(argv[9]); // 1e-3
+  DT_value = atof(argv[9]); // 1e-3
   CFL = atof(argv[10]); // 1e-3
   sprintf(resultsName, "%s", argv[11]); 
-
-  //log
-  fprintf(ferr, "We,Oh,J,MAXlevel,epsilon,MU21,DT,Ldomain,tmax,Bo\n");
-  fprintf(ferr, "%g,%g,%g,%d,%4.3e,%g,%g,%g,%g,%g\n", We, Oh, J, MAXlevel, epsilon, MU21, DT, Ldomain, tmax, Bo);
-  
+  DT=1e-6;
+ 
   L0 = Ldomain;
-  NITERMAX = 1000;
+  NITERMAX = 200;
+  NITERMIN = 2;
 
   rho1 = 1., rho2 = RHO21;
   mu1 = Oh / sqrt(We), mu2 = MU21 * Oh / sqrt(We);
@@ -93,15 +92,28 @@ int main(int argc, char const *argv[])
 
 event init(t = 0)
 {
-  refine(R2Drop(x, y) < 1.05 && (level < MAXlevel));
-  fraction(f, 1. - R2Drop(x, y));
-  foreach ()
-  {
-    u.x[] = -1.0 * f[];
-    u.y[] = 0.0;
+  if(!restore (file = "dump",list = all)){
+    //log
+    fprintf(ferr, "We,Oh,J,MAXlevel,epsilon,MU21,DT,Ldomain,tmax,Bo\n");
+    fprintf(ferr, "%g,%g,%g,%d,%4.3e,%g,%g,%g,%g,%g\n", We, Oh, J, MAXlevel, epsilon, MU21, DT, Ldomain, tmax, Bo);
+    refine(R2Drop(x, y) < 1.05 && (level < MAXlevel));
+    fraction(f, 1. - R2Drop(x, y));
+    foreach ()
+    {
+      u.x[] = -1.0 * f[];
+      u.y[] = 0.0;
+    }
+    boundary((scalar *){f, u.x, u.y});
   }
 }
 
+int refRegion(double x, double y, double z){
+  return (((y < 2.0 && x < 0.002) || (y < 0.002)) ? (MAXlevel < 13 ? 13 : MAXlevel):
+          ((y < 2.0 && x < 0.005) || (y < 0.005)) ? (MAXlevel < 12 ? 12 : MAXlevel):
+          ((y < 2.0 && x < 0.01) || (y < 0.01)) ? (MAXlevel < 11 ? 11 : MAXlevel):
+          ((y < 2.0 && x < 0.02) || (y < 0.02)) ? (MAXlevel < 10 ? 10 : MAXlevel):
+          MAXlevel);
+}
 /**
 ## Adaptive Mesh Refinement
 */
@@ -124,12 +136,18 @@ event adapt(i++)
       double D2 = (sq(D11) + sq(D22) + sq(D33) + 2.0 * sq(D13));
       D2c[] = f[] * D2;
     }
-    adapt_wavelet((scalar *){f, KAPPA, u.x, u.y, D2c},
-                  (double[]){fErr, KErr, VelErr, VelErr, DissErr},
-                  MAXlevel, MINlevel);
+    adapt_wavelet_limited((scalar *){f, KAPPA, u.x, u.y, D2c},
+              (double[]){fErr, KErr, VelErr, VelErr, DissErr},
+              refRegion, MINlevel);
     unrefine(x > 0.95 * Ldomain);
   }
-  if (t>5){
+  if (t>0.5){
+    DT=1e-5;
+  }
+  if (t>4){
+    DT=1e-4;
+  }  
+  if (t>6){
     DT=1e-3;
   }
   double time_now = perf.t / 60.0;
@@ -186,13 +204,13 @@ event postProcess(t += tsnap)
     }
   }
 
-  double ke = 0., xMin = HUGE;
+  double ke = 0., xMin = Ldomain;  
   foreach (reduction(+ : ke) reduction(min : xMin)){
-    ke += sq(Delta) * (2 * pi * y) * (sq(u.x[]) + sq(u.y[])) * rho(f[]) / 2.;
+    ke += (2 * pi * y) * (sq(u.x[]) + sq(u.y[])) * rho(f[]) / 2. * sq(Delta);
     if (d[] == MainPhase){
-      if ((x < xMin) && (x < xMin)){
+      if ((x < xMin)){
         xMin = x;
-      }
+      }      
     }               
   }
 
@@ -202,13 +220,13 @@ event postProcess(t += tsnap)
   if (pid() == 0){
     if (i == 0){
       fp1 = fopen("log_run", "w");   
-      fprintf(fp1, "t,i,Cell,Wallclocktime(min),CPUtime(min),ke,Zmin,Zmin1\n");fflush(fp1);
+      fprintf(fp1, "t,i,Cell,Wallclocktime(min),CPUtime(min),ke,Zmin\n");fflush(fp1);
     }
     fp1 = fopen("log_run", "a");  
-    fprintf(fp1, "%g,%d,%d,%g,%g,%g,%g,%g\n", t,i,grid->tn,perf.t / 60.0, DeltaT,ke,xMin,xMin);fflush(fp1);
+    fprintf(fp1, "%g,%d,%ld,%g,%g,%g,%g\n", t,i,grid->tn,perf.t / 60.0, DeltaT,ke,xMin);fflush(fp1);
   }
 
-  if ((t > tmax - tsnap) || (t > 1 && (ke < 1e-6 || (xMin > 0.04))))
+  if ((t > tmax - tsnap) || ( (ke < 1e-6 || (xMin > 0.04))))
   {
     char comm[256];
     sprintf(comm, "cp log_run ../Results_Running/log_%s.csv", resultsName);

@@ -132,6 +132,8 @@ event adapt(i++)
   if (t>5){
     DT=1e-3;
   }
+  double time_now = perf.t / 60.0;
+  fprintf(ferr, "%g,%d,%g\n", t,i,time_now);
 }
 
 /**
@@ -152,7 +154,6 @@ event writingFiles(t += tsnap)
 
 double t_last = 0.0;
 double DeltaT = 0.0;
-double x_min_min = HUGE;
 event postProcess(t += tsnap)
 {
   scalar d[];
@@ -194,9 +195,6 @@ event postProcess(t += tsnap)
       }
     }               
   }
-  if (xMin < x_min_min){
-    x_min_min = xMin;
-  }
 
   DeltaT = perf.t / 60.0 - t_last;
   t_last = perf.t / 60.0;
@@ -207,10 +205,10 @@ event postProcess(t += tsnap)
       fprintf(fp1, "t,i,Cell,Wallclocktime(min),CPUtime(min),ke,Zmin,Zmin1\n");fflush(fp1);
     }
     fp1 = fopen("log_run", "a");  
-    fprintf(fp1, "%g,%d,%d,%g,%g,%g,%g,%g\n", t,i,grid->tn,perf.t / 60.0, DeltaT,ke,xMin,xMin-x_min_min);fflush(fp1);
+    fprintf(fp1, "%g,%d,%d,%g,%g,%g,%g,%g\n", t,i,grid->tn,perf.t / 60.0, DeltaT,ke,xMin,xMin);fflush(fp1);
   }
 
-  if ((t > tmax - tsnap) || (t > 1 && (ke < 1e-6 || (xMin - x_min_min > 0.04))))
+  if ((t > tmax - tsnap) || (t > 1 && (ke < 1e-6 || (xMin > 0.04))))
   {
     char comm[256];
     sprintf(comm, "cp log_run ../Results_Running/log_%s.csv", resultsName);
