@@ -56,7 +56,8 @@ int MAXlevel;
 double We, Oh, J, Bo;
 double tmax, Ldomain;
 double tsnap = 0.01;
-char nameOut[80], nameOut1[80], resultsName[80], dumpFile[80];
+char nameOut[80], resultsName[80], dumpFile[80];
+double epsilon1;
 int main(int argc, char const *argv[])
 {
   origin(0., 0.);
@@ -70,6 +71,7 @@ int main(int argc, char const *argv[])
   Ldomain = atof(argv[7]);  // 8
   DT = atof(argv[8]);       // 1e-4
   sprintf(resultsName, "%s", argv[9]);
+  epsilon1 = atof(argv[10]); 
 
   L0 = Ldomain;
   NITERMAX = 500;
@@ -86,7 +88,7 @@ int main(int argc, char const *argv[])
   J = J / 2;
 
   CFL = 0.05;
-  epsilon = t < tsnap ? 1e-1 : 1e-3;
+  epsilon = t < tsnap ? J : epsilon1*J;
   rho1 = 1., rho2 = RHO21;
   mu1 = Oh / sqrt(We), mu2 = MU21 * Oh / sqrt(We);
   f.sigma = 1.0 / We;
@@ -153,7 +155,7 @@ event adapt(i++)
 double t_last = 0.0;
 double DeltaT = 0.0;
 int count_run = 0;
-double ke_test=0;
+double ke_last = 100;
 event postProcess(t += 0.001)
 {
   double ke = 0., xMin = Ldomain, mvx = 0., mvy = 0.;
@@ -183,8 +185,17 @@ event postProcess(t += 0.001)
     return 1;
   }
   count_run = count_run + 1;
-  ke_test=ke;
 
+  if (ke < 0 || ke > 5)
+  {
+    fprintf(ferr, "Ke_Error, Exit...\n");
+    return 1;
+  }
+  else
+  {
+    p.nodump = true;
+    dump(file = "dump");
+  }
   // log
   DeltaT = perf.t / 60.0 - t_last;
   t_last = perf.t / 60.0;
@@ -204,27 +215,19 @@ event postProcess(t += 0.001)
   // stop condition
   if ((t > tmax - tsnap) || (t > 0.5 && (ke < 1e-4 || (xMin > 0.04))))
   {
+    char comm[256];
+    sprintf(comm, "cp log_run ../Results_Running/log_%s.csv", resultsName);
+    system(comm);
     fprintf(ferr, "Reach Max time. Or Kinetic energy is too small or droplet bounce off. Exiting...\n");
     return 1;
   }
 }
 
-event snapshot(t += tsnap; t <= 20)
+event snapshot(t += 0.01; t <= 20)
 {
-  if (ke_test < 0 || ke_test > 5)
-  {
-    fprintf(ferr, "Ke_Error, Exit...\n");
-    return 1;
-  }
-  else
-  {
-    p.nodump = true;
-    dump(file = "dump");
-  }
-
   p.nodump = true;
-  sprintf(nameOut1, "intermediate/restart_snapshot-%5.4f", t);
-  dump(file = nameOut1);
+  sprintf(nameOut, "intermediate/restart_snapshot-%5.4f", t);
+  dump(file = nameOut);
   p.nodump = false;
   sprintf(nameOut, "intermediate/snapshot-%5.4f", t);
   dump(file = nameOut);

@@ -216,11 +216,11 @@ event snapshot(t += tsnap; t <= 20)
     fprintf(ferr, "Ke_Error, Exit...\n");
     return 1;
   }
-  else
-  {
-    p.nodump = true;
-    dump(file = "dump");
-  }
+  // else
+  // {
+  //   p.nodump = true;
+  //   dump(file = "dump");
+  // }
 
   p.nodump = true;
   sprintf(nameOut1, "intermediate/restart_snapshot-%5.4f", t);

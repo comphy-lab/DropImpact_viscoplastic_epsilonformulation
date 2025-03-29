@@ -13,14 +13,15 @@ import matplotlib.ticker as ticker
 # variables = [0,0.005,0.01,0.025,0.05,0.075,0.1,0.125,0.15,0.175,0.2,0.4]
 # variables = [0,0.01,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.6,0.8,1.0,2.0,4.0,6.0,8.0,10.0]
 # variables = [0,0.01,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.6,0.8,1.0,2.0,4.0,6.0,8.0,10.0]
-variables = [0,0.01,0.05,0.1,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.8,1.0]
-Oh=0.0025
-We=20
+variables = [0.5,1,2]
+Oh=0.0035
+We=5
+J=0.6
 variables_exist=[]
-variable_name="J"
+variable_name="a"
 currentDir=os.path.dirname(os.path.abspath(__file__))
 results_folder = os.path.join(currentDir, "Results_Running")
-plot_folder = os.path.join(currentDir, f"We{We}_J_Oh{Oh}")
+plot_folder = os.path.join(currentDir, f"We{We}_J{J}_Oh{Oh}")
 if not os.path.exists(plot_folder):
     os.makedirs(plot_folder)
 # Data storage dictionary
@@ -34,11 +35,11 @@ plt.rc('legend', fontsize=14)    # Legend font size
 plt.rc('figure', titlesize=20)   # Figure title font size
 # Load data
 for variable in variables:
-    J=variable
-    maxLevel=11
+    a=variable
+    maxLevel=10
     epsilon="1e-3"
-    filename = f"Bo0.5-We{We}-J{J}-Oh{Oh}-MAXlevel{maxLevel}-epsilon{epsilon}.csv"
-    filename1 = f"Bo0.5-We{We}-J{J}-Oh{Oh}-MAXlevel10-epsilon{epsilon}.csv"
+    filename = f"Bo0.0-We{We}-J{J}-Oh{Oh}-a{a}-MAXlevel{maxLevel}.csv"
+    filename1 = f"Bo0.0-We{We}-J{J}-Oh{Oh}-MAXlevel10.csv"
     filepath = os.path.join(results_folder, filename)
     filepath1 = os.path.join(results_folder, filename1)
     if not os.path.exists(filepath):

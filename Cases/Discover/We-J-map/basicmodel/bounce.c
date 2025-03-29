@@ -142,9 +142,9 @@ event adapt(i++)
       double D2 = (sq(D11) + sq(D22) + sq(D33) + 2.0 * sq(D13));
       D2c[] = f[] * D2;
     }
-    adapt_wavelet_limited((scalar *){f, u.x, u.y, KAPPA, D2c},
+    adapt_wavelet((scalar *){f, u.x, u.y, KAPPA, D2c},
                           (double[]){fErr, VelErr, VelErr, KAPPAErr, D2Err},
-                          refRegion, MINlevel);
+                          MAXlevel, MINlevel);
   }
   double time_now = perf.t / 60.0;
   fprintf(ferr, "%g,%d,%g\n", t, i, time_now);
@@ -202,7 +202,8 @@ event postProcess(t += 0.001)
     fflush(fp1);
   }
   // stop condition
-  if ((t > tmax - tsnap) || (t > 0.5 && (ke < 1e-4 || (xMin > 0.04))))
+  // if ((t > tmax - tsnap) || (t > 0.5 && (ke < 1e-4 || (xMin > 0.04))))
+  if ((t > tmax - tsnap) || (mvx>0))
   {
     fprintf(ferr, "Reach Max time. Or Kinetic energy is too small or droplet bounce off. Exiting...\n");
     return 1;
@@ -216,11 +217,11 @@ event snapshot(t += tsnap; t <= 20)
     fprintf(ferr, "Ke_Error, Exit...\n");
     return 1;
   }
-  else
-  {
-    p.nodump = true;
-    dump(file = "dump");
-  }
+  // else
+  // {
+  //   p.nodump = true;
+  //   dump(file = "dump");
+  // }
 
   p.nodump = true;
   sprintf(nameOut1, "intermediate/restart_snapshot-%5.4f", t);

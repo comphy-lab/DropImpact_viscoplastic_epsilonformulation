@@ -39,7 +39,7 @@ To model Viscoplastic liquids, we use a modified version of [two-phase.h](http:/
 #define MU21 (1e-2)
 
 // Distance and radius of drop calculations
-#define Xdist (1.02)
+#define Xdist (1.05)
 #define R2Drop(x, y) (sq(x - Xdist) + sq(y))
 
 // boundary conditions
@@ -69,11 +69,10 @@ int main(int argc, char const *argv[])
   tmax = atof(argv[6]);     // 10
   Ldomain = atof(argv[7]);  // 8
   DT = atof(argv[8]);       // 1e-4
-  sprintf(resultsName, "%s", argv[9]);
 
   L0 = Ldomain;
   NITERMAX = 500;
-  TOLERANCE = 1e-4;
+  // TOLERANCE = 1e-4;
 
   char comm[80];
   sprintf(comm, "mkdir -p intermediate");
@@ -112,14 +111,6 @@ event init(t = 0)
   }
 }
 
-int refRegion(double x, double y, double z)
-{
-  return (((y < 3.0 && x < 0.002) || (y < 0.5 && x < 0.02) || (y < 0.002)) ? MAXlevel : ((y < 3.0 && x < 0.005) || (y < 0.005)) ? MAXlevel-1 : MAXlevel-2);
-}
-
-/**
-## Adaptive Mesh Refinement
-*/
 event adapt(i++)
 {
   if (t < 1e-2)
@@ -142,41 +133,35 @@ event adapt(i++)
       double D2 = (sq(D11) + sq(D22) + sq(D33) + 2.0 * sq(D13));
       D2c[] = f[] * D2;
     }
-    adapt_wavelet_limited((scalar *){f, u.x, u.y, KAPPA, D2c},
+    adapt_wavelet((scalar *){f, u.x, u.y, KAPPA, D2c},
                           (double[]){fErr, VelErr, VelErr, KAPPAErr, D2Err},
-                          refRegion, MINlevel);
+                          MAXlevel, MINlevel);
   }
   double time_now = perf.t / 60.0;
   fprintf(ferr, "%g,%d,%g\n", t, i, time_now);
 }
 
+
 double t_last = 0.0;
 double DeltaT = 0.0;
 int count_run = 0;
 double ke_test=0;
-event postProcess(t += 0.001)
+double yMax_last=0;
+event postProcess(t += tsnap)
 {
-  double ke = 0., xMin = Ldomain, mvx = 0., mvy = 0.;
-  foreach (reduction(+ : ke) reduction(+ : mvx) reduction(+ : mvy) reduction(min : xMin))
+  double ke = 0., yMax = 0;
+  foreach (reduction(+ : ke) reduction(max : yMax))
   {
-    mvx += (2 * pi * y) * (clamp(f[], 0., 1.) * u.x[]) * sq(Delta);
-    mvy += (2 * pi * y) * (clamp(f[], 0., 1.) * u.y[]) * sq(Delta);
     ke += (2 * pi * y) * (sq(u.x[]) + sq(u.y[])) * rho(f[]) / 2. * sq(Delta);
     if (f[] > 1e-6)
     {
-      if ((x < xMin))
+      if (y > yMax)
       {
-        xMin = x;
-      }
-    }
+        yMax = y;
+      } 
+    }  
   }
 
-  double pdatum = 0, wt = 0;
-  foreach_boundary(top, reduction(+ : pdatum), reduction(+ : wt))
-  {
-    pdatum += 2 * pi * y * p[] * (Delta);
-    wt += 2 * pi * y * (Delta);
-  }
   // only run 5 step for the fine step
   if (DT < 5e-5 && count_run > 2)
   {
@@ -194,38 +179,32 @@ event postProcess(t += 0.001)
     if (i == 0)
     {
       fp1 = fopen("log_run", "w");
-      fprintf(fp1, "t,i,Cell,Wallclocktime(min),CPUtime(min),ke,mvx,mvy\n");
+      fprintf(fp1, "t,i,Cell,Wallclocktime(min),CPUtime(min),ke,yMax\n");
       fflush(fp1);
     }
     fp1 = fopen("log_run", "a");
-    fprintf(fp1, "%g,%d,%ld,%g,%g,%g,%g,%g\n", t, i, grid->tn, perf.t / 60.0, DeltaT, ke, mvx, mvy);
+    fprintf(fp1, "%g,%d,%ld,%g,%g,%g,%g\n", t, i, grid->tn, perf.t / 60.0, DeltaT, ke, yMax);
     fflush(fp1);
   }
-  // stop condition
-  if ((t > tmax - tsnap) || (t > 0.5 && (ke < 1e-4 || (xMin > 0.04))))
-  {
-    fprintf(ferr, "Reach Max time. Or Kinetic energy is too small or droplet bounce off. Exiting...\n");
-    return 1;
-  }
+
+  // if (yMax<yMax_last)
+  // {
+  //   fprintf(ferr, "Stop Running\n");
+  //   return 1;
+  // }
+  yMax_last=yMax;
 }
 
-event snapshot(t += tsnap; t <= 20)
+event snapshot(t=0; t += tsnap; t <= 20)
 {
-  if (ke_test < 0 || ke_test > 5)
-  {
-    fprintf(ferr, "Ke_Error, Exit...\n");
-    return 1;
-  }
-  else
-  {
-    p.nodump = true;
-    dump(file = "dump");
-  }
-
   p.nodump = true;
-  sprintf(nameOut1, "intermediate/restart_snapshot-%5.4f", t);
-  dump(file = nameOut1);
-  p.nodump = false;
+  dump(file = "dump");
   sprintf(nameOut, "intermediate/snapshot-%5.4f", t);
   dump(file = nameOut);
+
+  if ((t > tmax - tsnap))
+  {
+    fprintf(ferr, "Stop Running\n");
+    return 1;
+  }
 }
